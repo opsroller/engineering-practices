@@ -1,0 +1,14 @@
+{
+  "name": "engineering-practices",
+  "version": "0.1.0",
+  "description": "Shared working practices for every role: project onboarding, git with Conventional Commits, work packages, talking to other agents, and asset and code provenance.",
+  "author": {
+    "name": "opsroller"
+  },
+  "repository": "https://github.com/opsroller/engineering-practices",
+  "license": "MIT",
+  "keywords": [
+    "role",
+    "job-function"
+  ]
+}
