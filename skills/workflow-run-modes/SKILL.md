@@ -88,6 +88,11 @@ the reviewer cannot write files, pass its reply as handed back with
 `--answer <key>=-` on stdin. Never write a reviewer's answer file yourself. Keep the state file in your scratch space, not in the
 repository.
 
+Every answer is checked against its step's schema; a wrong-shaped one
+exits 2 naming the bad fields and changes nothing, so fix it and resend.
+When a run ends `blocked:`, fix the cause and run the `--redo <key>`
+command the runner prints under the result.
+
 If the workflow tool itself is unavailable, read the workflow file and
 do each `agent()` prompt in order the same way, with its args filled in.
 A call with `independent: true` in its options goes to a separate

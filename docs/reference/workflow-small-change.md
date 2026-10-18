@@ -20,8 +20,8 @@ Reference, for anyone landing a chore-sized change through the workflow.
 | Scope | open, add | Reads the project's rules; checks for overlapping work (as in [deliver-package](workflow-deliver-package.md#overlapping-work)) and stops on a duplicate; decides whether the change is small; picks the default branch (from the remote), branch name, PR title and local check. Add mode: confirms the PR is open and pushable, takes its head branch, and the title is the commit subject |
 | Change | open, add | Open: branches off the latest remote default branch, makes the minimal edit, runs the local check, commits, pushes, opens a draft PR. Add: checks out the PR head at its remote tip, commits and pushes there, adds a line to the PR description; no new branch or PR |
 | Check | open, add | Independent read of the diff (add mode: the added commits, then the whole PR for what they break); one fix round at most |
-| Hand off | open, add | Polls CI itself until it settles, fixes red CI caused by the change (two attempts at most), re-runs one failing job once when its cause is outside the diff (a pass is logged as a flake, as in [land-pr](workflow-land-pr.md#one-failing-job)), marks the PR ready and asks the reviewer; in add mode asks again with the new head SHA, since an earlier pass no longer counts |
-| Merge | merge | Confirms the PR is out of draft, comments are answered and the reviewer passed the current head (per the profile's review convention); brings the latest default branch in; re-runs the local check and polls CI; squash-merges only after a conflict-free update, or a merge resolved keep-both (the pass carries with the remerge-diff posted to the reviewer, as in [land-pr](workflow-land-pr.md#reviewer-pass)); deletes the branch |
+| Hand off | open, add | Merges the base in first when the host reports the PR as conflicting or behind ([as in land-pr](workflow-land-pr.md#base-current-before-ci)), then polls CI itself until it settles, fixes red CI caused by the change (two attempts at most), re-runs one failing job once when its cause is outside the diff (a pass is logged as a flake, as in [land-pr](workflow-land-pr.md#one-failing-job)), marks the PR ready and asks the reviewer; in add mode asks again with the new head SHA, since an earlier pass no longer counts |
+| Merge | merge | Confirms the PR is out of draft, comments are answered and the reviewer passed the current head (per the profile's review convention); brings the latest default branch in, and again before each CI wait if the PR is conflicting or behind; re-runs the local check and polls CI; squash-merges only after a conflict-free update, or a merge resolved keep-both (the pass carries with the remerge-diff posted to the reviewer, as in [land-pr](workflow-land-pr.md#reviewer-pass)); deletes the branch |
 
 ## Step labels
 
@@ -51,8 +51,8 @@ Only a session without such a tool uses one bounded watch (for example
 
 | Branch is pushed to by | Update with |
 |---|---|
-| Only the author | Rebase onto the default branch, push with `--force-with-lease` |
-| Others too, or the profile says merge | Merge the default branch into the PR branch |
+| Only the author | Merge the default branch in; rebase and push with `--force-with-lease` only if the profile requires a rebase |
+| Others too | Merge the default branch into the PR branch |
 
 If the update conflicts or needs a lockfile or generated file
 regenerated, the merge step pushes the resolution, polls CI, asks the
