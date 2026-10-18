@@ -83,7 +83,7 @@ this brief again"`; in agents mode the step runs again.
 |---|---|
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
-| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]...` drives an inline run from a state file; see [State file runner](#state-file-runner) |
+| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file; see [State file runner](#state-file-runner) |
 | `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
@@ -101,6 +101,14 @@ same as driving the Workflow tool by hand.
 | `--answer <key>=<file>` | Stores the file's content under `key`: parsed as JSON when it is JSON, else as trimmed text |
 | `--reviewer <key>=<name>` | Records who answered an independent step |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
+| `--fresh` | Drops every stored answer and keeps the args: use it to run again after a check-in, when the result said to (`waiting:`, `not merged:` or a `next` that says run again) |
+
+Loops that ask a new brief each round, such as land-pr's sync rounds
+while the default branch moves, need no special handling: each round
+is one more `--answer`. A result that asks for a later run (CI still
+pending, waiting on a reviewer) is a finished run; the runner prints the
+`--fresh` command for the next one, since a stored answer from before the
+check-in would otherwise be replayed.
 
 An `--answer` for a step the run does not reach on this call is not kept:
 the state file stores the run's own `results`, and the step is asked

@@ -3,7 +3,7 @@
 // only its new answers instead of the whole results blob.
 // Usage:
 //   node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>]
-//     [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]...
+//     [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]
 // The first call needs the args; they are stored in the state file and reused.
 // Spec: docs/reference/workflow-run-modes.md, "State file runner".
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -11,7 +11,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 const argv = process.argv.slice(2)
 const [file, statePath] = argv
 if (!file || !statePath || file.startsWith('--') || statePath.startsWith('--')) {
-  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]...")
+  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]")
   process.exit(2)
 }
 const state = existsSync(statePath)
@@ -24,6 +24,9 @@ const pair = (s, flag) => {
 }
 for (let i = 2; i < argv.length; i++) {
   const flag = argv[i]
+  // A re-run after a check-in (CI pending, main moved, waiting on a
+  // reviewer) starts from the current state, so drop every stored answer.
+  if (flag === '--fresh') { state.results = {}; state.reviewers = {}; continue }
   const val = argv[++i]
   if (val === undefined) { console.error(`${flag} needs a value`); process.exit(2) }
   if (flag === '--args') state.args = JSON.parse(val)
@@ -75,6 +78,8 @@ if (out.status === 'done') {
   console.log(`status: done (state in ${statePath})`)
   if ((out.self_reviewed || []).length) console.log(`self-reviewed, report as such: ${out.self_reviewed.join(', ')}`)
   console.log(JSON.stringify(out.result, null, 2))
+  const again = typeof out.result === 'string' ? /^(waiting|not merged)\b/.test(out.result) : !!(out.result && /\b(run (it |this |the workflow )?again|re-?run)\b/i.test(String(out.result.next || '')))
+  if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  node ${process.argv[1]} ${file} ${statePath} --fresh`)
 } else {
   console.log(`status: next, ${out.next.length} brief(s). Do each, write its answer to a file, then run:`)
   console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)

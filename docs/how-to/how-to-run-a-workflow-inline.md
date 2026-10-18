@@ -63,7 +63,10 @@ runner, which keeps args and answers in a JSON file:
    ```
 
 4. Repeat steps 2 and 3 until it prints `status: done` and the result.
-   To redo a step, add `--redo <key>`.
+   To redo a step, add `--redo <key>`. When the result asks for a later
+   run (`waiting:` on CI, or a land-pr waiting on its reviewer), schedule
+   your check-in, then run it again with `--fresh`: it keeps the args and
+   drops the stored answers, so nothing from before the wait is replayed.
 
 ## Run only part of a workflow
 
