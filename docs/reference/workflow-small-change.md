@@ -51,8 +51,8 @@ Only a session without such a tool uses one bounded watch (for example
 
 | Branch is pushed to by | Update with |
 |---|---|
-| Only the author | Rebase onto the default branch, push with `--force-with-lease` |
-| Others too, or the profile says merge | Merge the default branch into the PR branch |
+| Only the author | Merge the default branch in; rebase and push with `--force-with-lease` only if the profile requires a rebase |
+| Others too | Merge the default branch into the PR branch |
 
 If the update conflicts or needs a lockfile or generated file
 regenerated, the merge step pushes the resolution, polls CI, asks the

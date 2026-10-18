@@ -94,7 +94,7 @@ runner, which keeps args and answers in a JSON file:
    To redo a step, add `--redo <key>`. If the result starts with
    `blocked:` (or another stop), fix what it names, then run the
    `--redo` command the runner prints under the result: it asks the
-   step that stopped the run again and keeps the answers before it.
+   last answered step again and keeps the answers before it.
    When the result asks for a later
    run (`waiting:` on CI, or a land-pr waiting on its reviewer), schedule
    your check-in, then run it again with `--fresh`: it keeps the args and

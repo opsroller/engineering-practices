@@ -225,13 +225,13 @@ if (out.status === 'done') {
   const again = typeof out.result === 'string' ? /^(waiting|not merged)\b/.test(out.result) : !!(out.result && /\b(run (it |this |the workflow )?again|re-?run)\b/i.test(String(out.result.next || '')))
   if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  node ${process.argv[1]} ${file} ${statePath} --fresh`)
   // A run that stopped short (blocked, changes requested, failed) resumes
-  // at the step whose answer stopped it, once its cause is fixed.
+  // at the last answered step, once the cause is fixed.
   const r = out.result
   const stopped = !again && (typeof r === 'string' ? /^(blocked|changes requested|failed)\b/i.test(r) : !!(r && typeof r === 'object' && (r.blocked === true || /^blocked\b/i.test(String(r.status || '')))))
   if (stopped) {
     const last = Object.keys(out.results || {}).pop()
     console.log('\nThis run stopped before the end. Fix the cause it names, then resume:')
-    if (last) console.log(`  node ${process.argv[1]} ${file} ${statePath} --redo '${last}'\n(asks "${last}", the step whose answer stopped the run, again and replays every answer before it; add --redo for any earlier step that must also be redone)`)
+    if (last) console.log(`  node ${process.argv[1]} ${file} ${statePath} --redo '${last}'\n(asks "${last}", the last answered step, again and replays every answer before it; add --redo for any earlier step that must also be redone)`)
     console.log(`  node ${process.argv[1]} ${file} ${statePath} --fresh\n(starts over from the first step with the same args)`)
   }
 } else {
