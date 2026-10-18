@@ -18,8 +18,8 @@ squash merge.
 |---|---|
 | Adopt | Reads the default branch from the remote; finds the PR for the branch, or opens a draft one; confirms you can push to the head branch; names the local check |
 | Follow-up | Only with `followup`: checks out the head branch at its remote tip, makes the smallest edit, runs the local check, commits (Conventional Commit), pushes, adds a line to the PR description. Stops if the change needs new behaviour, a contract change or a new doc page |
-| Sync | Merges the latest default branch in, resolves conflicts, re-runs the local check, pushes, polls CI; repeats if the default branch moved meanwhile (3 rounds at most) |
-| Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
+| Sync | Merges the latest default branch in, resolves conflicts, applies [cross-PR items](#cross-pr-items), re-runs the local check, pushes, polls CI and [re-runs one failing job once](#one-failing-job); repeats if the default branch moved meanwhile (3 rounds at most) |
+| Review | Reads the reviewer verdict; [carries a pass](#reviewer-pass) across keep-both merges with the merge diff posted to the reviewer; asks for review of the delta (and marks the PR ready) if a new pass is needed and nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
 | Close | Only with `row` or `notify`: reads the status row on the default branch and, if it does not read the project's merged-state value, sets it (a direct commit only where the project allows it, otherwise small-change); messages each `notify` target once with the PR link and squash SHA (agent sessions by cross-session message, people by mention; never the project owner) |
 
@@ -44,6 +44,24 @@ one author pushes to the branch, then pushes with `--force-with-lease`.
 A rebase gives every commit a new SHA, so no earlier reviewer pass
 counts and each run asks the reviewer again.
 
+The Sync step reports `keep_both_only` for each merge: true when every
+conflicted hunk kept both sides' lines unchanged, in order, and the
+merge commit edits nothing else.
+
+## Cross-PR items
+
+A merge can be clean and still leave the PR incomplete. After merging,
+Sync lists what the default branch brought in. Where the PR applies one
+change to every member of a set (each preset, profile, variant,
+workflow, CI job, build target, locale or config entry of a kind) and
+the default branch added a member, Sync extends the change to it in its
+own commit (`<type>: apply <change> to <item> from <PR>`). Where the
+default branch renamed, moved or changed an interface the PR uses, Sync
+adapts the PR. An extension that needs new behaviour, a path the
+author does not own, or the other author's decision is not made: it is
+listed under `unresolved` as `cross-PR: <item>: <why>` and the run
+stops.
+
 ## CI polling
 
 The agent reads the checks on the PR's latest head SHA itself, never
@@ -56,12 +74,34 @@ runs the workflow again. Only a session without such a tool uses one
 bounded watch command (up to 20 minutes). It fixes red CI caused by the
 PR or the merge, two attempts at most.
 
+### One failing job
+
+When exactly one job or matrix leg fails (one browser, one OS, one
+shard), the same tests pass on the other legs, and the log points
+outside the PR's diff (timeout, runner, network, download), Sync
+re-runs only that job, once per head SHA (`gh run rerun <run-id> --job
+<job-id>` or the service's "re-run failed jobs"). It never re-runs the
+whole workflow, never twice, and never for a failure in code the PR
+touches.
+
+| Re-run result | Then |
+|---|---|
+| Passes | A flake: CI counts as green; one entry (date, check and job, head SHA, failed run link, one-line failure) goes in the project's flake log and under "Flaky checks" in the PR description; the run returns it in `flakes` |
+| Fails | Real: handled as red CI |
+
+The flake log is the file or issue the profile names; if it names none,
+one open issue titled "CI flake log" (created if missing). When the log
+already holds two entries for that check in the last 30 days, the entry
+says so, so the check's owner quarantines or fixes it.
+
 ## Reviewer pass
 
-A pass counts for the current head, or for an earlier head when the only
-later commits are conflict-free merges of the default branch. A follow-up
-commit is new code, so after one the reviewer must pass a head that
-includes it.
+| Commits after the passed head | Then |
+|---|---|
+| None | The pass counts |
+| Only merges of the default branch, each conflict-free | The pass carries silently |
+| Only merges of the default branch, each conflict-free or resolved keep-both | The pass carries: one PR comment to the reviewer (and a message if the reviewer is an agent session) says "Pass carried from <SHA> to <head>" with each merge's `git show --remerge-diff`, so the reviewer can object; the result has `review_carried_from` |
+| Anything else: a fix, a follow-up, a cross-PR extension, a merge that rewrote, dropped or combined lines, a regenerated file | A new pass is needed, of the delta only: the request names those commits and pastes their diffs and remerge-diffs |
 
 ## Outputs
 
@@ -70,7 +110,7 @@ includes it.
 | Usage string | Neither `pr` nor `branch` given |
 | `blocked: <target>: <problem>` | PR closed or merged, or you cannot push to its head branch |
 | `blocked: follow-up ... not added ...` | The follow-up is not small enough to ride on this PR; use small-change `{ change, pr }` or deliver-package |
-| `blocked: ... conflicts that lose behaviour either way` | Lists the files to resolve with the other change's author |
+| `blocked: ... conflicts or cross-PR items ...` | Lists the files or cross-PR items to resolve with the other change's author |
 | `blocked: local check fails ...` | The check fails after syncing |
 | `waiting: CI ... is still running` | CI is still running; schedule a check-in 5 minutes later, then run again |
 | `blocked: CI ... is red: ...` | CI is red after two fix attempts |
@@ -81,4 +121,5 @@ includes it.
 | `blocked: should-fix round ... failed`, `blocked: local check fails ... after the should-fix edits` | The should-fix step returned nothing, or broke the local check |
 | `not merged: ... moved after verification` | Head or base changed between verification and merge; run again, or use the project's merge queue |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged (no `row` or `notify`) |
+| `review_carried_from`, `flakes` (on any object result) | The passed SHA a pass was carried from; flake entries recorded this run |
 | Object `{ pr, merged, squash_sha, ci, row, row_pr, notified, not_notified, next }` | Squash-merged and closed out: `row` is `already`, `fixed` (with `row_pr`), `not-fixed` or `none`; `next` is `done` or lists what is still owed |

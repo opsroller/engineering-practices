@@ -7,7 +7,7 @@ export const meta = {
     { title: 'Build', detail: 'implement on the package branch with provenance recorded; with prior, only what the prior work left out' },
     { title: 'Document', detail: 'write or update the planned Diataxis pages in the same PR; skipped when prior already wrote them' },
     { title: 'Check', detail: 'independent review of change and docs, fix loop (max 3 rounds)' },
-    { title: 'Ship', detail: 'PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
+    { title: 'Ship', detail: 'merge the default branch in, extend the PR to items it added that the PR must also touch, confirm CI (one re-run of a single flaky job, logged), PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
   ],
 }
 
@@ -153,6 +153,15 @@ const built = prior
   ? `The work for ${wp} is already built and tested on that branch by ${priorFrom}${priorDocs.length ? `, with docs pages ${priorDocs.join(', ')}` : ''}${prior.notes && prior.notes.length ? `; its notes: ${[].concat(prior.notes).join('; ')}` : ''}. Do not rebuild it.`
   : ''
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// One failing leg of a matrix (one browser, one OS) with a cause outside
+// the diff is worth one re-run, never a silent retry: each pass on re-run
+// is a flake and goes in the project's flake log.
+const FLAKE = `A single failing job: when exactly one job or matrix leg failed (one browser, one OS, one shard), the same tests pass on the other legs, and its log points outside this PR's diff (a timeout, runner, network, download or infrastructure error, or a test that does not touch the changed code), re-run only that job, once per head SHA (\`gh run rerun <run-id> --job <job-id>\`, or the hosting service's "re-run failed jobs"). Never re-run the whole workflow, never re-run twice, and never re-run a failure in code this PR touches. If the re-run passes, it is a flake: count CI as green, and record it in the project's flake log (the file or issue the profile names; if it names none, one open issue titled "CI flake log", created if missing) as one entry: date, check and job, head SHA, link to the failed run, one-line failure. Add the same line under a "Flaky checks" heading in the PR description. If the log already has two entries for that check in the last 30 days, say so, so its owner quarantines or fixes it. If the re-run fails again, the failure is real: treat it as red. Report each flake as "<check/job> | <head SHA> | <failed run link> | <one-line failure>".`
+
+// When the default branch gains a new member of a set this PR edits member
+// by member (a preset, a workflow, a target), the merge is clean but the PR
+// is incomplete; the sync step looks for that, not only for conflicts.
+const CROSS_PR = (head, base) => `Cross-PR items: list what the merge brought in from ${base} (\`git diff <previous merge base>..<merged ${base} tip> --stat\`, and the PRs those commits came from). Where this PR applies one change to every member of a set (every preset, profile, variant, workflow, CI job, build target, locale or config entry of a kind) and ${base} added a new member of that set, or changed a file this PR must also touch for the same reason, extend this PR's change to it with the same edit, in its own commit ("<type>: apply <this change> to <new item> from <PR>"), and list it under cross_pr. Where ${base} renamed, moved or changed an interface this PR uses, adapt this PR to it the same way. If an extension needs new behaviour, a path ${head}'s author does not own, or a decision the other PR's author should make, do not make it: list it under unresolved as "cross-PR: <item>: <why>".`
 // Two sessions doing the same work is the costliest waste there is, so
 // every workflow that starts work first looks for work already in flight.
 const OVERLAP = (self) => `Before planning, look for overlapping work in flight${self ? ` (other than ${self})` : ''}: the repository's open pull requests and recently pushed branches, the plan's status rows, and, where your tools can list them, other running sessions, threads or assignees and what they are on (read them; do not ask). Return overlaps: each item that shares this work's goal (kind "duplicate") or changes the same files, package or contract (kind "same-files"), with a link and its owner. Return an empty list if you find none.`
@@ -222,6 +231,8 @@ const SHIP = {
     ci: { type: 'string' },
     dependants: { type: 'array', items: { type: 'string' } },
     status_set: { type: 'string' },
+    cross_pr: { type: 'array', items: { type: 'string' } },
+    flakes: { type: 'array', items: { type: 'string' } },
   },
   required: ['pr_url', 'ci'],
 }
@@ -318,9 +329,12 @@ if (!reviewed || open.length) {
 
 phase('Ship')
 const s = await agent(
-  `For ${wp} on ${p.branch}: confirm the build, tests and CI pass; ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
+  `For ${wp} on ${p.branch}:
+1. Bring it up to date: fetch and merge the latest remote default branch into ${p.branch} (a merge, not a rebase, unless the profile requires a rebase and you alone push to the branch). Resolve conflicts the engineering-practices land-pr way: shared lists (docs indexes, changelogs, registries, manifests) keep both sides' entries in the file's order with no duplicates; lockfiles and generated files take the default branch's version and are regenerated; same logic changed on both sides is combined only if both intents provably hold, otherwise abort the merge and return the files as ci "red: conflicts: <files>". ${CROSS_PR(p.branch, 'the default branch')} Unresolved items go in ci as "red: cross-PR: <items>". Re-run the build and tests and push.
+2. Confirm the build, tests and CI pass on the pushed head. ${FLAKE}
+3. ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
 Do not merge here: the author squash-merges after the reviewer passes it and CI is green.
-${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), and the dependant packages to notify with the PR link once merged.`,
+${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), the cross-PR items you applied, any flakes, and the dependant packages to notify with the PR link once merged.`,
   { schema: SHIP, phase: 'Ship', label: 'ship' },
 )
 if (!s) return `blocked: ship step for ${wp} failed (agent returned nothing); PR ${b.pr_url || 'on ' + p.branch} is reviewed but not marked ready`
@@ -335,6 +349,8 @@ return {
   caveats,
   overlaps: near,
   dependants: s.dependants || [],
+  ...((s.cross_pr || []).length ? { cross_pr: s.cross_pr } : {}),
+  ...((s.flakes || []).length ? { flakes: s.flakes } : {}),
   land: { pr: s.pr_url, row: `${plan}: ${wp}`, notify: [...(s.dependants || []).map((x) => `${x} (dependant)`), 'the coordinator or whoever assigned this package'] },
   next: `after the code reviewer passes, run /engineering-practices:land-pr with the land object as args: it keeps the branch current, polls CI, squash-merges, confirms the ${wp} row reads merged on the default branch and tells each dependant and the assigner`,
 }

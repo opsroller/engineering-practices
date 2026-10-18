@@ -95,10 +95,33 @@ Message and type details: [commit-reference.md](commit-reference.md).
   (rebase with `--force-with-lease` on a branch only you push to,
   otherwise merge it in), let CI run on the new head, then merge. This
   avoids landing on a base nobody tested and repeated conflicts.
+- **Cross-PR items.** A clean merge can still leave the PR incomplete.
+  If the PR applies one change to every member of a set (each preset,
+  workflow, CI job, build target, locale) and the default branch added a
+  member, extend the change to it in its own commit; if the default
+  branch renamed or moved something the PR uses, adapt. If the extension
+  needs another author's call, or a path you do not own, ask them first.
+- **Carrying a review pass.** A pass covers one head. It carries to a
+  later head when every commit since is a merge of the default branch
+  that was conflict-free or resolved keep-both (both sides' lines kept
+  unchanged, nothing else edited; `git show --remerge-diff <merge>`
+  shows only that). For a keep-both merge, post the remerge-diff to the
+  reviewer with "pass carried from <SHA>" so they can object; do not ask
+  for a full re-review. Any other commit (a fix, a cross-PR extension, a
+  resolution that rewrote or combined lines) needs a new pass of that
+  delta only: name the commits and paste their diffs.
+- **One failing job.** When exactly one job or matrix leg fails (one
+  browser, one OS) and its log points outside the diff (timeout,
+  runner, network), re-run that job alone, once per head. A pass on
+  re-run is a flake: record it in the project's flake log (the file or
+  issue the profile names, else an open issue titled "CI flake log")
+  and under "Flaky checks" in the PR body. A second failure is real.
+  Never re-run silently, twice, or for a failure in code the PR touches.
 - Delete the branch after merging. Tell dependants (`peer-coordination`).
 - For a chore-sized change (a config line, a dependency bump, a docs
   index fix) the `small-change` workflow runs this whole section; for
-  an existing branch or PR, `land-pr` runs it.
+  an existing branch or PR, `land-pr` runs it, cross-PR items, pass
+  carrying and the one-job re-run included.
 
 ## Trunk is red
 

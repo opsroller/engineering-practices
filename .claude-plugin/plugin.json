@@ -1,6 +1,6 @@
 {
   "name": "engineering-practices",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Shared base for every role: project onboarding, trunk-based git with Conventional Commits and squash merge, work packages, direct peer coordination, provenance and licensing of contributions, and Diataxis documentation built into the work.",
   "author": {
     "name": "opsroller"

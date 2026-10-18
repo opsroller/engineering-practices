@@ -24,5 +24,8 @@ Reference, for roles branching, committing, opening PRs or merging.
 | Who merges | The author, when CI is green, the reviewer passed and the branch is current |
 | CI | Polled by the author on the latest head SHA, never awaited as a notification |
 | Before merging | Bring in the latest default branch, let CI run on the new head, then squash-merge |
+| Cross-PR items | After the merge, extend the PR's change to new members of any set it edits member by member (presets, workflows, jobs, targets) that the default branch added, in its own commit; adapt to renames |
+| Review pass | Covers one head; carries across merges that were conflict-free or resolved keep-both (remerge-diff posted to the reviewer); other later commits need a pass of the delta only |
+| One failing job | Re-run that job alone, once per head, only when its cause is outside the diff; a pass on re-run is a flake, recorded in the flake log (profile's file or issue, else an open "CI flake log" issue) and the PR body |
 | After merge | Delete branch, tell dependants |
 | Trunk red | Fix forward in minutes or `revert:` with `Refs: <sha>` |
