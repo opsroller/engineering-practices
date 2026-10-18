@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'land-pr',
-  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>", row: "<plan file and item whose status row must read merged on the default branch, optional>", notify: ["<who to tell once merged: dependants, the coordinator or whoever assigned the work>"]',
+  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts and cross-PR items, poll CI yourself and re-run one flaky job once, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>", row: "<plan file and item whose status row must read merged on the default branch, optional>", notify: ["<who to tell once merged: dependants, the coordinator or whoever assigned the work>"]',
   phases: [
     { title: 'Adopt', detail: 'find or open the PR for the branch; read the default branch; confirm you can push to the head branch' },
     { title: 'Follow-up', detail: 'only with followup: make that change on the head branch, run the local check, commit, push, note it in the PR body' },
-    { title: 'Sync', detail: 'merge the latest default branch in, resolve conflicts, re-run local checks, push, poll CI; repeat while the default branch moves (max 3 rounds)' },
-    { title: 'Review', detail: 'read the reviewer verdict on the current head; ask for review if nobody has been asked; on a pass with should-fix items, fix, push and ask for a pass on the new head' },
+    { title: 'Sync', detail: 'merge the latest default branch in, resolve conflicts, extend the PR to items the default branch added that it must also touch, re-run local checks, push, poll CI, re-run one failing job once and log a pass as a flake; repeat while the default branch moves (max 3 rounds)' },
+    { title: 'Review', detail: 'read the reviewer verdict; carry a pass across merges resolved keep-both (noting the merge diff to the reviewer); ask for a delta review after other commits; on a pass with should-fix items, fix, push and ask for a pass on the new head' },
     { title: 'Merge', detail: 'refresh the PR body, confirm head and base are still the verified ones, squash-merge' },
     { title: 'Close', detail: 'only with row or notify: confirm the status row reads merged on the default branch, fix it if not, tell each notify target with the PR link' },
   ],
@@ -128,6 +128,17 @@ const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup o
 // sleeps may be blocked, so a wait is a scheduled check-in, then a re-run.
 const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
 
+// One failing leg of a matrix (one browser, one OS) with a cause outside
+// the diff is worth one re-run, never a silent retry: each pass on re-run
+// is a flake and goes in the project's flake log.
+// Same text in deliver-package.js and small-change.js: change all three.
+const FLAKE = `A single failing job: when exactly one job or matrix leg failed (one browser, one OS, one shard), the same tests pass on the other legs, and its log points outside this PR's diff (a timeout, runner, network, download or infrastructure error, or a test that does not touch the changed code), re-run only that job, once per head SHA (\`gh run rerun <run-id> --job <job-id>\`, or the hosting service's "re-run failed jobs"). Never re-run the whole workflow, never re-run twice, and never re-run a failure in code this PR touches. If the re-run passes, it is a flake: count CI as green, and record it in the project's flake log (the file or issue the profile names; if it names none, one open issue titled "CI flake log", created if missing) as one entry: date, check and job, head SHA, link to the failed run, one-line failure. Add the same line under a "Flaky checks" heading in the PR description. If the log already has two entries for that check in the last 30 days, say so, so its owner quarantines or fixes it. If the re-run fails again, the failure is real: treat it as red. Report each flake as "<check/job> | <head SHA> | <failed run link> | <one-line failure>".`
+
+// When the default branch gains a new member of a set this PR edits member
+// by member (a preset, a workflow, a target), the merge is clean but the PR
+// is incomplete; the sync step looks for that, not only for conflicts.
+const CROSS_PR = (head, base) => `Cross-PR items: list what the merge brought in from ${base} (\`git diff <previous merge base>..<merged ${base} tip> --stat\`, and the PRs those commits came from). Where this PR applies one change to every member of a set (every preset, profile, variant, workflow, CI job, build target, locale or config entry of a kind) and ${base} added a new member of that set, or changed a file this PR must also touch for the same reason, extend this PR's change to it with the same edit, in its own commit ("<type>: apply <this change> to <new item> from <PR>"), and list it under cross_pr. Where ${base} renamed, moved or changed an interface this PR uses, adapt this PR to it the same way. If an extension needs new behaviour, a path ${head}'s author does not own, or a decision the other PR's author should make, do not make it: list it under unresolved as "cross-PR: <item>: <why>".`
+
 const ADOPT = {
   type: 'object',
   properties: {
@@ -157,10 +168,14 @@ const SYNC = {
   properties: {
     head_sha: { type: 'string' },
     base_sha: { type: 'string' },
+    merge_sha: { type: 'string' },
     conflicts_resolved: { type: 'array', items: { type: 'string' } },
+    keep_both_only: { type: 'boolean' },
+    cross_pr: { type: 'array', items: { type: 'string' } },
     unresolved: { type: 'array', items: { type: 'string' } },
     check_passed: { type: 'boolean' },
     ci: { type: 'string' },
+    flakes: { type: 'array', items: { type: 'string' } },
     base_moved: { type: 'boolean' },
   },
   required: ['check_passed', 'ci', 'base_moved'],
@@ -172,6 +187,7 @@ const VERDICT = {
     reviewer: { type: 'string' },
     open_items: { type: 'array', items: { type: 'string' } },
     asked: { type: 'boolean' },
+    carried_from: { type: 'string' },
   },
   required: ['state'],
 }
@@ -233,6 +249,10 @@ Return whether it is done, the new head SHA, the commit subject, and the reason 
 }
 
 let s = null
+// What each sync round merged and how, so the review step can tell a
+// keep-both merge (the pass carries) from one that needs a delta review.
+const merges = []
+const flakes = []
 for (let round = 1; round <= MAX_SYNC; round++) {
   phase('Sync')
   s = await agent(
@@ -243,15 +263,19 @@ for (let round = 1; round <= MAX_SYNC; round++) {
    - Enum values or id tables: keep both sides' entries if their ids differ. If both sides took the same id or value, stop: renumbering one would silently change an id that code, data or saves already use. List the file under unresolved.
    - Lockfiles and generated files: take ${a.default_branch}'s version, then regenerate with the project's tooling. Never hand-merge them.
    - Code or prose where both sides changed the same logic: keep both intents if you can show they combine; if picking either side loses behaviour, stop, abort the merge and list the files under unresolved.
+   Say whether every conflict was a keep-both resolution (keep_both_only): each conflicted hunk kept both sides' lines unchanged, in order, with nothing else edited in the merge commit. Any rewritten line, dropped line, regenerated file or combined logic makes it false.
 3. Commit the merge with the default message, or "chore: merge ${a.default_branch} into ${a.head_branch}" if the project requires Conventional Commit subjects on every commit.
-4. Re-run the local check: ${a.local_check}. If it fails because of the merge, fix it with the smallest edit and commit; if it fails on ${a.default_branch} too, note that and do not widen the PR.
-5. Push, then: ${CI_POLL} If CI is red because of this PR or the merge, fix it (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts.
-6. Fetch once more and say whether ${a.default_branch} moved past the commit you merged (base_moved).
-Return the head SHA, the ${a.default_branch} SHA you merged, conflicts resolved, unresolved files, whether the local check passed, the CI state, and base_moved.`,
+4. ${CROSS_PR(a.head_branch, a.default_branch)}
+5. Re-run the local check: ${a.local_check}. If it fails because of the merge, fix it with the smallest edit and commit; if it fails on ${a.default_branch} too, note that and do not widen the PR.
+6. Push, then: ${CI_POLL} If CI is red because of this PR or the merge, fix it (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts. ${FLAKE}
+7. Fetch once more and say whether ${a.default_branch} moved past the commit you merged (base_moved).
+Return the head SHA, the ${a.default_branch} SHA you merged, the merge commit SHA (merge_sha, empty if nothing was merged), conflicts resolved, keep_both_only, cross-PR items applied (cross_pr), unresolved files and items, whether the local check passed, the CI state, flakes, and base_moved.`,
     { schema: SYNC, phase: 'Sync', label: `sync:${round}` },
   )
   if (!s) return `blocked: sync of ${pr} failed (agent returned nothing); check the branch for a half-finished merge`
-  if ((s.unresolved || []).length) return `blocked: ${pr} has conflicts that lose behaviour either way; resolve by hand or with the other change's author:\n${list(s.unresolved)}`
+  flakes.push(...(s.flakes || []))
+  if (s.merge_sha) merges.push({ sha: s.merge_sha, keep_both_only: s.keep_both_only === true || !(s.conflicts_resolved || []).length, conflicts: s.conflicts_resolved || [], cross_pr: s.cross_pr || [] })
+  if ((s.unresolved || []).length) return `blocked: ${pr} has conflicts or cross-PR items that lose behaviour either way, or need another author's call; resolve by hand or with the other change's author:\n${list(s.unresolved)}`
   if (!s.check_passed) return `blocked: local check fails on ${pr} after syncing with ${a.default_branch}`
   if (/^pending/.test(s.ci || '')) return `waiting: CI on ${pr} is still running (${s.ci}); ${WAIT}, then run land-pr again`
   if (!/^(green|none)/.test(s.ci || '')) return `blocked: CI on ${pr} is ${s.ci}; fix it, then run land-pr again`
@@ -263,8 +287,12 @@ Return the head SHA, the ${a.default_branch} SHA you merged, conflicts resolved,
 phase('Review')
 const v = await agent(
   `Read the review state of ${pr} at head ${s.head_sha || '(current head)'}. Do not edit code.
-The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. A pass counts only if it covers the current head or the only commits after it are merges of ${a.default_branch} with no conflict edits in reviewed files. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review).
-${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not count; the reviewer must pass a head that includes it. ` : ''}Return state "passed" (a pass with nothing left to do), "should-fix" (the reviewer passed it but asked for non-blocking fixes before merge, such as should-fix or nit items they want done now: list each under open_items), "changes" (list every unanswered or unfixed blocking finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ${REVIEWER}, and return asked: true.`,
+The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review), and find the reviewer's latest pass and the head SHA it covered.
+Which pass counts:
+- A pass on the current head counts.
+- A pass on an earlier head carries to the current head when every commit after it is a merge of ${a.default_branch} whose conflict resolutions kept both sides unchanged (keep-both). Check each merge with \`git show --remerge-diff <merge>\`: it shows only what the resolution changed against a plain merge, so it must be empty or show only hunks that keep both sides' lines as they were. A conflict-free merge carries silently. A keep-both merge carries with a note: post one PR comment addressed to the reviewer (and, if the reviewer is an agent session, message it too) saying "Pass carried from <passed SHA> to <current head>: the only commits since are merges of ${a.default_branch} resolved keep-both", followed by each merge's remerge-diff, so the reviewer can object; then return "passed" with carried_from set to the passed SHA. Do not ask for a full re-review for these.
+- Any other commit after the pass (a fix, a cross-PR extension, a merge that rewrote, dropped or combined lines, a regenerated file) needs a new pass, but of the delta only: when asking, name those commits and paste their diffs and remerge-diffs, and say the rest was passed at <passed SHA>.
+${merges.length ? `This run merged: ${merges.map((m) => `${m.sha} (${m.keep_both_only ? 'keep-both or conflict-free' : `conflicts edited: ${m.conflicts.join(', ') || 'see the merge'}`}${m.cross_pr.length ? `; cross-PR commits: ${m.cross_pr.join('; ')}` : ''})`).join('; ')}. Cross-PR commits are new code and need a delta pass.\n` : ''}${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not carry; the reviewer must pass it (as a delta). ` : ''}Return state "passed" (a pass that counts, with nothing left to do), "should-fix" (the reviewer passed it but asked for non-blocking fixes before merge, such as should-fix or nit items they want done now: list each under open_items), "changes" (list every unanswered or unfixed blocking finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ${REVIEWER}, and return asked: true.`,
   { schema: VERDICT, phase: 'Review', label: 'review' },
 )
 if (!v) return `blocked: could not read the review state of ${pr} (agent returned nothing)`
@@ -285,6 +313,7 @@ Return the new head SHA, whether the local check passed, the items fixed, and th
     review: `should-fix items pushed at ${sf.head_sha || 'a new head'}; waiting on ${v.reviewer || 'the reviewer'} to pass it`,
     fixed: sf.fixed || [],
     skipped: sf.skipped || [],
+    ...(flakes.length ? { flakes } : {}),
     next: `${WAIT}; then run /engineering-practices:land-pr { pr: "${pr}" } again, which re-syncs, re-checks CI and merges once the new head is passed`,
   }
 }
@@ -293,6 +322,7 @@ if (v.state !== 'passed') {
     pr,
     ci: s.ci,
     review: `waiting on ${v.reviewer || 'the reviewer'}${v.asked ? ' (asked now)' : ''}`,
+    ...(flakes.length ? { flakes } : {}),
     next: `check the verdict yourself, do not wait to be notified: ${WAIT}; when it passes, run /engineering-practices:land-pr { pr: "${pr}" } again`,
   }
 }
@@ -315,7 +345,7 @@ if (!m.merged) {
 }
 const row = args.row ? String(args.row).trim() : ''
 const notify = Array.isArray(args.notify) ? args.notify.map(String).filter((x) => x.trim()) : (args.notify ? [String(args.notify)] : [])
-const done = { pr, merged: true, squash_sha: m.squash_sha, ci: s.ci }
+const done = { pr, merged: true, squash_sha: m.squash_sha, ci: s.ci, ...(v.carried_from ? { review_carried_from: v.carried_from } : {}), ...(flakes.length ? { flakes } : {}) }
 if (!row && !notify.length) return { ...done, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
 
 // The merge is the end of the change but not of the work: the plan row and

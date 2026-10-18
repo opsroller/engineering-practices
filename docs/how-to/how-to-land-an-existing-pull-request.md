@@ -40,9 +40,13 @@ merge without letting it drift behind the default branch.
 
 2. If it returns `blocked: follow-up ... not added`, the change is too
    big to ride on this PR: use small-change with `pr`, or a work package.
-   If it returns `blocked: ... conflicts that lose behaviour either way`,
-   settle each listed file with the author of the other change
-   (`peer-coordination`), commit, and run it again.
+   If it returns `blocked: ... conflicts or cross-PR items ...`,
+   settle each listed file or item with the author of the other change
+   (`peer-coordination`), commit, and run it again. Items it could
+   extend itself (a preset or workflow the default branch added that
+   your change must also cover) are already committed on the branch.
+   If CI shows one failing browser or OS leg, the workflow re-runs that
+   job once; a pass is logged as a flake and listed in `flakes`.
 
 3. If it returns `waiting: CI ... is still running`, schedule a check-in
    for 5 minutes later (a send-later, wakeup or scheduled-task tool) and
@@ -58,7 +62,9 @@ merge without letting it drift behind the default branch.
 
 6. If it returns an object with `review: waiting on ...`, check the
    verdict yourself later and run it again once the reviewer has passed
-   the PR.
+   the PR. After a merge of the default branch resolved keep-both, the
+   earlier pass carries and no new review is asked; after other new
+   commits, the reviewer is asked to pass only those.
 
 7. When it returns `merged: true` with `next: "done"`, the row and the
    messages are handled. Without `row` or `notify`, tell whoever asked
