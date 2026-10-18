@@ -6,7 +6,8 @@ Reference, for anyone running a work package through the workflow.
 |---|---|
 | File | `workflows/deliver-package.js` |
 | Command | `/engineering-practices:deliver-package` |
-| Args | `{ wp: "WP-NN" (required), plan: "<path>" (optional; default from CLAUDE.md or profile) }` |
+| Args | `{ wp: "WP-NN" (required), plan: "<path>" (optional; default from CLAUDE.md or profile), branch: "<existing branch>" (optional), pr: "<existing PR>" (optional) }` |
+| Branch | `wp/<id>-<slug>` cut from the latest default branch; with `branch` or `pr`, that branch (and its open PR) instead |
 
 ## Phases
 
@@ -30,5 +31,5 @@ Reference, for anyone running a work package through the workflow.
 | `blocked: ship step ... failed` | Ship agent returned nothing |
 | Object `{ wp, pr, ci, docs, undocumented, dependants, next }` | PR ready for the code reviewer |
 
-The workflow never merges. The author squash-merges after the reviewer
-passes and CI is green.
+The workflow never merges. After the reviewer passes, the author lands
+the PR with [land-pr](workflow-land-pr.md).

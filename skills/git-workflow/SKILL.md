@@ -91,7 +91,8 @@ Message and type details: [commit-reference.md](commit-reference.md).
   avoids landing on a base nobody tested and repeated conflicts.
 - Delete the branch after merging. Tell dependants (`peer-coordination`).
 - For a chore-sized change (a config line, a dependency bump, a docs
-  index fix) the `small-change` workflow runs this whole section.
+  index fix) the `small-change` workflow runs this whole section; for
+  an existing branch or PR, `land-pr` runs it.
 
 ## Trunk is red
 

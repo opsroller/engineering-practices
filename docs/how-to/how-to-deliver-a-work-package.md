@@ -18,6 +18,10 @@ squash commit.
    /engineering-practices:deliver-package {"wp": "WP-07", "plan": "docs/plan.md"}
    ```
 
+   If you can only push to an assigned branch, or the package is already
+   started, add `"branch": "<name>"` or `"pr": "<number>"` to work there
+   instead of a new `wp/` branch.
+
    If you would rather drive it yourself, hand the package to the
    `package-lead` agent and follow the same steps.
 
@@ -32,9 +36,10 @@ squash commit.
 4. When it returns a PR URL, wait for the code-reviewer role's verdict.
    Answer each comment by changing the code, or with a reasoned reply.
 
-5. When CI is green, the reviewer has passed it and the branch is
-   current, squash-merge it yourself and delete the branch. Do not wait
-   for the project owner.
+5. When the reviewer has passed it, land it yourself with
+   [land-pr](how-to-land-an-existing-pull-request.md), which brings the
+   default branch in, re-checks CI and squash-merges. Do not wait for the
+   project owner.
 
 6. Tell each dependant listed in the result, with the PR link.
 
