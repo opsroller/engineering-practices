@@ -103,7 +103,11 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: "<handoff from a role workflow, optional>" }'
+const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: <handoff from a role workflow, optional: the whole result or its handoff field, { branch and/or pr (at least one), tests_pass: true (required), from, docs: [pages], undocumented: [..], non_original: [..], notes } > }'
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
+
 if (!args || !args.wp) return USAGE
 const wp = String(args.wp)
 const plan = args.plan ? String(args.plan) : "the project's work-package plan (path in CLAUDE.md or the project profile)"
@@ -121,8 +125,14 @@ const unwrap = (o) => {
 const prior = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
 if (args.prior !== undefined && args.prior !== null) {
   if (!prior) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
-  if (!prior.branch && !prior.pr) return 'blocked: prior names no branch or pr, so there is no built work to ship'
-  if (prior.tests_pass !== true) return `blocked: prior work from ${prior.from || 'the role workflow'} does not report tests_pass: true; finish it there first`
+  // Report every problem with the handoff at once, not one per run.
+  const bad = []
+  if (!prior.branch && !prior.pr) bad.push('names no branch or pr, so there is no built work to ship')
+  if (prior.tests_pass !== true) bad.push(`does not report tests_pass: true (got ${JSON.stringify(prior.tests_pass)}); finish the work in ${prior.from || 'the role workflow'} first`)
+  for (const k of ['docs', 'undocumented', 'non_original']) {
+    if (prior[k] !== undefined && !Array.isArray(prior[k])) bad.push(`${k} must be a list, got ${typeof prior[k]}`)
+  }
+  if (bad.length) return `blocked: prior handoff is not usable:\n- ${bad.join('\n- ')}\n${USAGE}`
 }
 const priorFrom = prior ? String(prior.from || 'a role workflow') : ''
 const priorDocs = prior && Array.isArray(prior.docs) ? prior.docs.map(String) : []
@@ -171,10 +181,10 @@ const PLAN = {
     },
     blockers: { type: 'array', items: { type: 'string' } },
     caveats: { type: 'array', items: { type: 'string' } },
-    review_status: { type: 'string' },
+    ship_status: { type: 'string' },
     overlaps: OVERLAPS,
   },
-  required: ['branch', 'owned_paths', 'steps', 'done_when', 'docs', 'review_status', 'overlaps'],
+  required: ['branch', 'owned_paths', 'steps', 'done_when', 'docs', 'ship_status', 'overlaps'],
 }
 const BUILD = {
   type: 'object',
@@ -221,7 +231,7 @@ ${OVERLAP(prBranch.pr || prBranch.branch || '')}
 ${existing ? existing + ' Return that branch name, after confirming you can push to it and reading any work already on it.' : ''}
 ${built ? built + ' Compare it with the package row and list under steps only what the row still needs that the branch lacks (often nothing), and under docs only pages still missing.' : ''}
 Return: the branch name (${existing ? 'the existing one' : 'wp/<id>-<slug>'}), owned paths, implementation steps as small slices, dependencies to stub against their contracts, the done-when line, the project's docs layout, and the Diataxis plan: for each thing the package will produce, use the compass (action/cognition x study/work) and the documentation skill's "what each kind of work owes" table to list the doc kind, the page to add or update, and why.
-Return review_status: the exact status value the plan or profile uses for a package whose PR is open and waiting for review (read the plan's status legend, the profile and how earlier rows were set), or "unchanged" when the project changes status only at merge or has no such value.
+Return ship_status: the status value the package row should carry in this PR, so the default branch is right the moment the PR squash-merges. Read the plan's status legend, the profile and how earlier rows were set: if the project marks a row done (or merged) in the package's own PR, return that value; if it keeps an in-review value while the PR is open and closes rows elsewhere, return that; if it does not say, return its done value. Return "unchanged" only when the project changes rows outside package PRs.
 List only what prevents starting (missing row, no testable done-when, missing contract) under blockers. Risks that do not stop the work (an assumption you made, a dependency stubbed for now, a test you cannot run here, a part that may need rework) go under caveats, never under blockers. Do not write code yet.`,
   { schema: PLAN, phase: 'Plan', label: 'plan' },
 )
@@ -305,7 +315,7 @@ if (!reviewed || open.length) {
 
 phase('Ship')
 const s = await agent(
-  `For ${wp} on ${p.branch}: confirm the build, tests and CI pass; ${p.review_status && p.review_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.review_status}", the project's own value for a package in review` : `leave the package's status row in ${plan} as it is: the project changes it only at merge or has no in-review value`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and request the project's reviewer (the code-reviewer role, not the project owner). Follow engineering-practices git-workflow and peer-coordination.
+  `For ${wp} on ${p.branch}: confirm the build, tests and CI pass; ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
 Do not merge here: the author squash-merges after the reviewer passes it and CI is green.
 ${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), and the dependant packages to notify with the PR link once merged.`,
   { schema: SHIP, phase: 'Ship', label: 'ship' },
@@ -318,7 +328,7 @@ return {
   docs: d ? d.pages : ['unverified: docs agent returned nothing'],
   ...(prior ? { prior: priorFrom } : {}),
   undocumented: d ? d.undocumented || [] : [],
-  status: s.status_set || p.review_status,
+  status: s.status_set || p.ship_status,
   caveats,
   overlaps: near,
   dependants: s.dependants || [],

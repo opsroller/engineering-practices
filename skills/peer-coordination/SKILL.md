@@ -19,6 +19,11 @@ roles; messages are how you change it safely.
   Message them with `send_message`. Reach the coordinator through
   `get_channel_session_id`.
 - No owner for a path or contract? Ask the coordinator, do not adopt it.
+- Asking for a review: a review request on the hosting service reaches
+  only an account. When the reviewer is an agent session or shares your
+  account, message its session or thread with the PR link, head SHA and
+  one line on what changed, and say where to post the verdict (a comment
+  review on a shared account).
 
 ## Check for overlapping work
 

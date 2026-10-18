@@ -68,7 +68,7 @@ A row without a testable done-when is not ready; ask the coordinator
 - [ ] Docs for the work written in the project's docs, right Diataxis kind (`documentation`)
 - [ ] Provenance recorded for anything not original (`provenance`)
 - [ ] PR ready, title a Conventional Commit, body lists stubs, follow-ups, `Refs: WP-<id>`
-- [ ] Row status set in the same PR to the plan's own in-review value, or left as is if the project changes it only at merge
+- [ ] Row status set in the same PR to the value it should have once merged (the plan's done value unless the project closes rows elsewhere), so the default branch is right at squash-merge
 - [ ] Reviewer passed it; you squash-merged it (`git-workflow`)
 - [ ] Each dependant told, with the PR link (`peer-coordination`)
 

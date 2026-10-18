@@ -107,6 +107,9 @@ const USAGE = 'usage: small-change { change: "<what to change and why>", type: "
 if (!args || (!args.change && !(args.pr && args.merge))) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
 const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
 // Two sessions doing the same work is the costliest waste there is, so
 // every workflow that starts work first looks for work already in flight.
@@ -254,7 +257,7 @@ const h = await agent(
   `Hand off ${onto ? `PR ${onto}, with this change on its head,` : `the draft PR ${c.pr_url || 'on ' + s.branch}`} for review.${onto ? ' Any pass the reviewer gave an earlier head no longer counts: ask again with the new head SHA and one line on what this change added.' : ''}
 1. ${CI_POLL}
 2. If CI is "red" because of this change, fix it on the branch (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts. If it is red on ${s.default_branch} too, say so and do not widen the PR.
-3. When CI is "green" or "none", re-read the title and description against the final diff, mark the PR ready for review, and ask the project's reviewer (the code-reviewer role, or the peer the profile names) to review it, with the PR link and one line on what changed. Never ask the project owner to review unless the profile says so. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
+3. When CI is "green" or "none", re-read the title and description against the final diff, mark the PR ready for review, and ${REVIEWER}. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
 Follow engineering-practices git-workflow and peer-coordination. Do not merge here.
 Return the PR URL, the CI state, whether the PR is ready, and who was asked to review.`,
   { schema: HANDOFF, phase: 'Hand off', label: 'handoff' },

@@ -107,6 +107,9 @@ const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<e
 if (!args || (!args.pr && !args.branch)) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
 const MAX_SYNC = 3
 const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
 
@@ -250,7 +253,7 @@ phase('Review')
 const v = await agent(
   `Read the review state of ${pr} at head ${s.head_sha || '(current head)'}. Do not edit code.
 The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. A pass counts only if it covers the current head or the only commits after it are merges of ${a.default_branch} with no conflict edits in reviewed files. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review).
-${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not count; the reviewer must pass a head that includes it. ` : ''}Return state "passed" (a pass with nothing left to do), "should-fix" (the reviewer passed it but asked for non-blocking fixes before merge, such as should-fix or nit items they want done now: list each under open_items), "changes" (list every unanswered or unfixed blocking finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
+${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not count; the reviewer must pass a head that includes it. ` : ''}Return state "passed" (a pass with nothing left to do), "should-fix" (the reviewer passed it but asked for non-blocking fixes before merge, such as should-fix or nit items they want done now: list each under open_items), "changes" (list every unanswered or unfixed blocking finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ${REVIEWER}, and return asked: true.`,
   { schema: VERDICT, phase: 'Review', label: 'review' },
 )
 if (!v) return `blocked: could not read the review state of ${pr} (agent returned nothing)`
@@ -259,7 +262,7 @@ if (v.state === 'should-fix') {
   const sf = await agent(
     `The reviewer passed ${pr} but asked for these fixes before merge:
 ${list(v.open_items)}
-On ${a.head_branch} (fetch, check out its remote tip${a.shared_branch ? ', pull others\' commits first' : ''}), make each with the smallest edit, run the local check (${a.local_check}), commit (Conventional Commits) and push. Answer each review comment with what changed. A pass covers one head only, so ask the reviewer to pass the new head, with its SHA and one line per fix (engineering-practices peer-coordination). If an item would widen the PR, do not make it: reply why and list it under skipped. Follow engineering-practices git-workflow.
+On ${a.head_branch} (fetch, check out its remote tip${a.shared_branch ? ', pull others\' commits first' : ''}), make each with the smallest edit, run the local check (${a.local_check}), commit (Conventional Commits) and push. Answer each review comment with what changed. A pass covers one head only, so ${REVIEWER}, asking for a pass on the new head with one line per fix. If an item would widen the PR, do not make it: reply why and list it under skipped. Follow engineering-practices git-workflow.
 Return the new head SHA, whether the local check passed, the items fixed, and the items skipped with why.`,
     { schema: SHOULDFIX, phase: 'Review', label: 'should-fix' },
   )

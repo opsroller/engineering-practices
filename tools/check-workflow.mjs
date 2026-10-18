@@ -31,7 +31,7 @@ const version = (canonical.match(/run-modes (v\d+)/) || [])[1]
 // An independent step only reads and reports. One that also edits, commits
 // or pushes (a docs check that applies its own fixes) has a part in the
 // work it judges, so it is not independent.
-const WRITES = /\b(commit|push|apply (the |your |each )?fix(es)?|fix (them|it|each|what you find))\b/i
+const WRITES = /\b(commit|push|apply (the |your |each |every |all |these )?(fix(es)?|changes|entries|index entr(y|ies)|every)|fix (them|it|each|what you find)|fix (\w+ ){0,3}(findings|problems|issues|blockers)( directly)?)\b/i
 const READ_ONLY = /\b(do not|don't|never) (edit|change|modify|commit|push|write)|\bread-only\b|\bwithout (editing|changing)\b/i
 const REVIEW_LIKE = /\bindependent(ly)?\s+(review|check|read|reviewer)|\bact as an? (independent )?reviewer|\byou did not write\b|\bfresh (read|reviewer)\b|\bmust not assume (its|the) intent/i
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
