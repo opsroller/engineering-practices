@@ -7,7 +7,7 @@ Reference, for anyone handing a work package to an agent.
 | File | `agents/package-lead.md` |
 | Name | `package-lead` |
 | Use when | Handing one whole work package to a single agent, in any role |
-| Loads | All six skills of this plugin, plus the job-function plugin for the package's role |
+| Loads | All seven skills of this plugin, plus the job-function plugin for the package's role |
 | Output | A ready (or merged) squash-mergeable PR with docs, provenance, plan row updated, dependants told |
 
 ## Steps

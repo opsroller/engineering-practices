@@ -2,7 +2,7 @@
 
 Reference, for anyone looking up what this plugin contains.
 
-The plugin has one agent, six skills and three workflows. Skills say how the
+The plugin has one agent, seven skills and three workflows. Skills say how the
 team works around any job; the agent applies them to one work package;
 the workflows run those steps with an independent check, for a whole
 package or for one small change, and land an existing branch or PR.
@@ -28,18 +28,25 @@ Working with others:
 
 - [peer-coordination](skill-peer-coordination.md): direct messages, contract changes, hand-offs.
 
+Running workflows:
+
+- [workflow-run-modes](skill-workflow-run-modes.md): inline, partial and resumed workflow runs.
+
 ## Workflows
 
 - [deliver-package](workflow-deliver-package.md): plan, build, document, check, ship one package.
 - [small-change](workflow-small-change.md): land one chore-sized change, from branch to squash merge.
 - [land-pr](workflow-land-pr.md): keep an existing branch or PR current, poll CI, squash-merge.
 
+Every workflow, here and in each role plugin, takes the optional `run` arg described in
+[workflow run modes](workflow-run-modes.md): inline with no subagents, chosen phases only, or resumed.
+
 ## Plugin manifest
 
 | Field | Value |
 |---|---|
 | `name` | `engineering-practices` |
-| `version` | `0.3.0` |
+| `version` | `0.4.0` |
 | `author.name` | `opsroller` |
 | `repository` | `https://github.com/opsroller/engineering-practices` |
 | `license` | `GPL-2.0-or-later` |
