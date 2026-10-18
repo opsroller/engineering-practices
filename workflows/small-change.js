@@ -107,6 +107,7 @@ const USAGE = 'usage: small-change { change: "<what to change and why>", type: "
 if (!args || (!args.change && !(args.pr && args.merge))) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
 // Two sessions doing the same work is the costliest waste there is, so
 // every workflow that starts work first looks for work already in flight.
 const OVERLAP = (self) => `Before planning, look for overlapping work in flight${self ? ` (other than ${self})` : ''}: the repository's open pull requests and recently pushed branches, the plan's status rows, and, where your tools can list them, other running sessions, threads or assignees and what they are on (read them; do not ask). Return overlaps: each item that shares this work's goal (kind "duplicate") or changes the same files, package or contract (kind "same-files"), with a link and its owner. Return an empty list if you find none.`
@@ -115,9 +116,9 @@ const dupes = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'dup
 const shared = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'same-files') : [])
 const said = (o) => `${o.what}${o.link ? ` (${o.link})` : ''}${o.owner ? `, owner ${o.owner}` : ''}`
 
-// Notifications about CI and reviews are not reliable; every CI wait in this
-// workflow is a bounded poll the agent runs itself.
-const CI_POLL = `Check CI yourself; never wait for a notification or webhook to tell you it finished. Read the check runs and commit statuses for the PR's current head commit (for example \`gh pr checks <pr> --watch --fail-fast\`, or the hosting service's checks API or tool), polling every 30 to 60 seconds for up to 20 minutes. Make sure the result belongs to the latest head SHA, not an earlier push. Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>", "pending: <checks still running>" (timed out), or "none" (the repository runs no CI on PRs). On red, read the failing log before you report.`
+// Notifications about CI and reviews are not reliable, and shell sleeps may
+// be blocked, so a CI wait is a scheduled check-in, then a re-run.
+const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
 
 const SCOPE = {
   type: 'object',
@@ -188,6 +189,7 @@ Return whether it merged, the squash commit SHA, the final CI state, and the rea
     { schema: MERGE, phase: 'Merge', label: 'merge' },
   )
   if (!m) return `blocked: merge step for ${pr} failed (agent returned nothing); check the PR state before retrying`
+  if (!m.merged && /^pending/.test(m.ci || '')) return `waiting: CI on ${pr} is still running (${m.ci}); ${WAIT}, then run merge mode again`
   if (!m.merged) return `not merged: ${pr}: ${m.reason || 'no reason given'} (CI: ${m.ci || 'unknown'})`
   return { pr, merged: true, squash_sha: m.squash_sha, ci: m.ci, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
 }
@@ -266,6 +268,6 @@ return {
   notes: (r.other || []).length ? r.other : [],
   next: h.ready
     ? `when the reviewer passes it, run /engineering-practices:small-change { pr: "${h.pr_url || c.pr_url}", merge: true } (it brings ${s.default_branch} in, re-checks CI itself and squash-merges)`
-    : `the PR is still draft: poll CI on ${h.pr_url || c.pr_url} yourself until it is green (fix it if red), then mark it ready and ask the reviewer by hand (engineering-practices git-workflow); do not re-run open mode, which would cut a second branch`,
+    : `the PR is still draft: check CI on ${h.pr_url || c.pr_url} yourself (${WAIT}) until it is green, fixing it if red, then mark it ready and ask the reviewer by hand (engineering-practices git-workflow); do not re-run open mode, which would cut a second branch`,
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)

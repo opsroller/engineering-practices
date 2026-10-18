@@ -36,7 +36,8 @@ squash-merged commit on the default branch.
    branch, or drop the change if the check also fails on the default
    branch and report that separately.
 
-4. If it returns `ready: false`, the PR is still draft: poll CI yourself
+4. If it returns `ready: false`, the PR is still draft: check CI yourself
+   (schedule a check-in every 5 minutes; do not sleep in the shell)
    until it is green, then mark the PR ready and ask the reviewer by
    hand. Do not run open mode again; it would cut a second branch.
 
@@ -69,7 +70,7 @@ squash-merged commit on the default branch.
 Follow the same order by hand with the
 [git-workflow skill](../reference/skill-git-workflow.md): branch from the
 latest remote default branch, edit, run the local check, commit, draft
-PR, poll CI with `gh pr checks <pr> --watch --fail-fast`, ask the
+PR, check CI with `gh pr checks <pr>` at scheduled check-ins, ask the
 reviewer, update the branch, squash-merge.
 
 See the [small-change reference](../reference/workflow-small-change.md)

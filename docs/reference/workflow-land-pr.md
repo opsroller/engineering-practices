@@ -19,12 +19,12 @@ squash merge.
 | Adopt | Reads the default branch from the remote; finds the PR for the branch, or opens a draft one; confirms you can push to the head branch; names the local check |
 | Follow-up | Only with `followup`: checks out the head branch at its remote tip, makes the smallest edit, runs the local check, commits (Conventional Commit), pushes, adds a line to the PR description. Stops if the change needs new behaviour, a contract change or a new doc page |
 | Sync | Merges the latest default branch in, resolves conflicts, re-runs the local check, pushes, polls CI; repeats if the default branch moved meanwhile (3 rounds at most) |
-| Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked |
+| Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
 
 ## Step labels
 
-For `run.only` and `run.results`: `adopt`, `followup` (with `followup` only), `sync:1` to `sync:3`, `review`, `merge`.
+For `run.only` and `run.results`: `adopt`, `followup` (with `followup` only), `sync:1` to `sync:3`, `review`, `should-fix` (after a pass with should-fix items), `merge`.
 Pass `results` only to resume the same run; a new land-pr run starts without them, because it re-reads the PR's current state.
 
 ## Conflict rules
@@ -45,11 +45,15 @@ counts and each run asks the reviewer again.
 
 ## CI polling
 
-The agent polls the checks on the PR's latest head SHA itself every 30
-to 60 seconds for up to 20 minutes, never waiting for a notification,
-and reports `green`, `red: <check> <cause>`, `pending: <checks>` or
-`none`. It fixes red CI caused by the PR or the merge, two attempts at
-most.
+The agent reads the checks on the PR's latest head SHA itself, never
+waiting for a notification, and reports `green`, `red: <check> <cause>`,
+`pending: <checks>` or `none`. It never sleeps in the shell. While checks
+run, a session that can schedule its own check-in (a send-later, wakeup
+or scheduled-task tool) reports `pending` at once; the run returns
+`waiting: ...`, and the caller schedules a check-in 5 minutes later and
+runs the workflow again. Only a session without such a tool uses one
+bounded watch command (up to 20 minutes). It fixes red CI caused by the
+PR or the merge, two attempts at most.
 
 ## Reviewer pass
 
@@ -67,10 +71,12 @@ includes it.
 | `blocked: follow-up ... not added ...` | The follow-up is not small enough to ride on this PR; use small-change `{ change, pr }` or deliver-package |
 | `blocked: ... conflicts that lose behaviour either way` | Lists the files to resolve with the other change's author |
 | `blocked: local check fails ...` | The check fails after syncing |
-| `waiting: CI ... is still running` | CI did not finish within the poll; run again later |
+| `waiting: CI ... is still running` | CI is still running; schedule a check-in 5 minutes later, then run again |
 | `blocked: CI ... is red: ...` | CI is red after two fix attempts |
 | `blocked: ... kept moving through 3 sync rounds` | The default branch moved every round |
 | `changes requested on ...` | Lists the open findings to fix before running again |
-| Object `{ pr, ci, review, next }` | Waiting on the reviewer; run again once the verdict is in |
+| Object `{ pr, ci, review, next }` | Waiting on the reviewer; schedule a check-in, run again once the verdict is in |
+| Object `{ pr, ci, review, fixed, skipped, next }` | The reviewer passed with should-fix items; `fixed` were pushed, `skipped` (would widen the PR) were answered; waiting on a pass of the new head |
+| `blocked: should-fix round ... failed`, `blocked: local check fails ... after the should-fix edits` | The should-fix step returned nothing, or broke the local check |
 | `not merged: ... moved after verification` | Head or base changed between verification and merge; run again, or use the project's merge queue |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged |

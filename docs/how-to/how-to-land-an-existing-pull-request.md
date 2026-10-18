@@ -37,17 +37,23 @@ merge without letting it drift behind the default branch.
    settle each listed file with the author of the other change
    (`peer-coordination`), commit, and run it again.
 
-3. If it returns `waiting: CI ... is still running`, check CI yourself
-   later and run it again. Do not wait for a notification.
+3. If it returns `waiting: CI ... is still running`, schedule a check-in
+   for 5 minutes later (a send-later, wakeup or scheduled-task tool) and
+   run it again then. Do not sleep in the shell or wait for a
+   notification.
 
 4. If it returns `changes requested`, fix each finding on the branch,
    answer each comment, and run it again.
 
-5. If it returns an object with `review: waiting on ...`, check the
+5. If it returns an object with `fixed` and `skipped`, the reviewer
+   passed with should-fix items: they are pushed and the reviewer was
+   asked to pass the new head. Wait for that pass as in step 6.
+
+6. If it returns an object with `review: waiting on ...`, check the
    verdict yourself later and run it again once the reviewer has passed
    the PR.
 
-6. When it returns `merged: true`, tell whoever asked for the change and
+7. When it returns `merged: true`, tell whoever asked for the change and
    any dependants, with the PR link.
 
 ## If the default branch keeps moving

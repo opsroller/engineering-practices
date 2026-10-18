@@ -29,17 +29,22 @@ For `run.only` and `run.results`: `scope`, `change`, `review`, `fix`, `re-review
 
 ## CI polling
 
-Every CI wait is a poll the agent runs itself, never a wait for a
-notification. It reads the checks for the PR's latest head SHA every
-30 to 60 seconds for up to 20 minutes (for example
-`gh pr checks <pr> --watch --fail-fast`) and reports one state:
+Every CI wait is a check the agent runs itself, never a wait for a
+notification, and never a sleep in the shell. It reads the checks for
+the PR's latest head SHA and reports one state:
 
 | State | Meaning |
 |---|---|
 | `green` | Every required check passed on the latest head |
 | `red: <check> <cause>` | A check failed; the cause comes from its log |
-| `pending: <checks>` | Still running when the poll timed out |
+| `pending: <checks>` | Still running |
 | `none` | The repository runs no CI on pull requests |
+
+On `pending`, a session that can schedule its own check-in (a
+send-later, wakeup or scheduled-task tool) schedules one 5 minutes later
+and runs the step again; merge mode returns `waiting: CI ...` for that.
+Only a session without such a tool uses one bounded watch (for example
+`gh pr checks <pr> --watch --fail-fast`, up to 20 minutes).
 
 ## Updating the branch before merge
 
@@ -69,6 +74,7 @@ so.
 | `blocked: hand-off ... failed` | Hand-off agent returned nothing; PR is still draft |
 | Object `{ pr, ci, ready, reviewer, notes, next }` | Open mode finished; `next` gives the merge command, or, if the PR is still draft, says to poll CI and hand off by hand |
 | `not merged: ...: updated with conflict resolution; needs the reviewer's pass on <sha>` | The update needed a conflict resolution or regenerated files; the reviewer was asked again; run merge mode after their pass |
+| `waiting: CI ... is still running` | Merge mode found CI still running; schedule a check-in 5 minutes later, then run merge mode again |
 | `not merged: ...` | Merge mode stopped: still draft, no reviewer pass, comments unanswered, CI not green, or the branch kept moving |
 | `blocked: merge step ... failed` | Merge agent returned nothing |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged |
