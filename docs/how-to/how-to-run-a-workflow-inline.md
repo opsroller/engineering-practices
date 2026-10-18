@@ -66,15 +66,27 @@ runner, which keeps args and answers in a JSON file:
    node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --review-prompt review
    ```
 
-   Save the reviewer's JSON answer to the path the line names. Do not
-   answer an independent brief yourself.
+   The prompt tells the reviewer to write its answer to the path the
+   line names, so you copy nothing out of its reply. Do not answer an
+   independent brief yourself, and never write that answer file.
 
-4. Pass the answers, and the reviewer of each independent brief (the
-   printed line has the exact command):
+4. Pass your own answers, and name the reviewer of each independent
+   brief (the printed line has the exact command); the runner collects
+   the reviewer's answer file by itself:
 
    ```
-   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer plan=plan.json --answer review=review.json --reviewer 'review=code-reviewer thread'
+   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer plan=plan.json --reviewer 'review=code-reviewer thread'
    ```
+
+   If the reviewer could not write files, pass its reply as it came back
+   on stdin instead; the runner takes the JSON out of the text around it:
+
+   ```
+   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer review=- --reviewer 'review=code-reviewer thread' < reply.txt
+   ```
+
+   An answer that lacks a required field stops the call with exit 2 and
+   records nothing; have the reviewer fix it and run again.
 
 5. Repeat steps 2 to 4 until it prints `status: done` and the result.
    To redo a step, add `--redo <key>`. When the result asks for a later

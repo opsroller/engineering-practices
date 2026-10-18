@@ -83,7 +83,8 @@ this brief again"`; in agents mode the step runs again.
 |---|---|
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
-| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file, and `--review-prompt <key>` prints the reviewer prompt of an independent brief; see [State file runner](#state-file-runner) |
+| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file\|->]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file and collects reviewers' answer files, and `--review-prompt <key>` prints the reviewer prompt of an independent brief; see [State file runner](#state-file-runner) |
+| `tools/test-run-inline.mjs` | `node tools/test-run-inline.mjs` self-tests the runner on a two-step fixture: answer-file collection, handback parsing, schema checks, `--fresh` and stale files |
 | `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
@@ -98,8 +99,8 @@ same as driving the Workflow tool by hand.
 | Flag | Effect |
 |---|---|
 | `--args '<JSON>'`, `--args-file <file>` | The workflow's own args (with any `run.only` or `run.from`); needed on the first call, stored for later ones |
-| `--answer <key>=<file>` | Stores the file's content under `key`: parsed as JSON when it is JSON, else as trimmed text |
-| `--reviewer <key>=<name>` | Records who answered an independent step |
+| `--answer <key>=<file>`, `--answer <key>=-` | Stores the file's content (or stdin, with `-`; once per call, a second `-` exits 2) under `key`. For a waiting brief with a schema: parsed as JSON, else the last fenced JSON block, else the outermost `{...}`, so a reviewer's whole reply can be passed as handed back; an answer that is not an object or lacks a required field exits 2 and records nothing. For a waiting text brief: the trimmed text, verbatim. For a key not waiting: JSON when the whole text is JSON, else trimmed text |
+| `--reviewer <key>=<name>` | Records who answered an independent step; required on the call that collects its answer file |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
 | `--fresh` | Drops every stored answer and keeps the args: use it to run again after a check-in, when the result said to (`waiting:`, `not merged:` or a `next` that says run again) |
 | `--review-prompt <key>` | Prints the reviewer prompt of the independent brief `key` waiting in the state file, and nothing else, so it can be piped to a fresh agent; runs nothing, changes nothing, takes no other flag, and exits 2 if no such brief waits |
@@ -120,18 +121,33 @@ self-contained reviewer prompt to `<state.json>.review/<key>.md` (the key
 with any character outside `A-Za-z0-9._-` replaced by `_`, so
 `review:1` becomes `review_1.md`). It holds the brief, a line that the
 reviewer had no part in the work and must only read and report, changing
-no files, the answer schema with its required fields, and, in a section
-marked for the caller, the command that records the answer. The runner
+no files, the answer schema with its required fields, an instruction to
+write the answer to `<dir>/<key>.answer.json` (the one file the reviewer
+may create) and repeat it at the end of its reply, and, in a section
+marked for the caller, the command that records the reviewer. The runner
 prints one line per independent brief, before the briefs:
 
 ```
-<key>: send <dir>/<key>.md to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '<key>'), save its JSON answer to <dir>/<key>.answer.json, then run: node tools/run-inline.mjs <workflow.js> <state.json> --answer '<key>=<dir>/<key>.answer.json' --reviewer '<key>=<reviewer name>'
+<key>: send <dir>/<key>.md to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '<key>'); it writes its JSON answer to <dir>/<key>.answer.json, which the next run collects. Then run: node tools/run-inline.mjs <workflow.js> <state.json> --reviewer '<key>=<reviewer name>'
 ```
 
 The answer file ends in `.txt` instead for a brief with no schema.
-Recording the answer with `--reviewer` keeps the step out of
-`self_reviewed`. Briefs that are not independent get no file and print
-as before.
+
+Collecting the handback: on each call, for every independent brief still
+waiting with no answer given on that call, the runner reads its answer
+file if it exists, parses it as `--answer` does, checks it against the
+schema, and stores it. It needs `--reviewer` for that key on the same
+call; without one, or with an answer that does not fit, it exits 2 and
+records nothing. A collected file is renamed to `<file>.used`. The
+caller never copies an answer out of a transcript. If the reviewer could
+not write files, pass its reply as handed back with `--answer '<key>=-'`
+on stdin. Never write the answer file yourself: it stands for the
+reviewer's own words. Recording the reviewer keeps the step out of
+`self_reviewed`. A `--fresh` call collects nothing, and when an
+independent brief is asked again, any answer file still beside it is
+renamed to `<file>.stale` first, so an old answer is never taken for a
+new brief. Briefs that are not independent get no file and print as
+before.
 
 Each call rewrites the state file with the merged `results`,
 `reviewers`, `status` and the full `next` briefs (schemas included), and
