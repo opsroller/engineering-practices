@@ -26,6 +26,23 @@ The price is that a step's answer must be passed back on every call.
 For the sizes role workflows handle (a plan, a few findings lists) that
 is cheap; it also makes every run resumable, even in a later session.
 
+## Why some steps must leave the session
+
+A multi-agent run gets independence for free: the agent that reviews a
+change is a fresh context that never saw it being made. Inline mode
+loses that. The author answers every brief, including the one that asks
+"act as an independent reviewer", and the result then reads as reviewed
+when it was not. Designer blindness and author bias are exactly what the
+review step exists to catch.
+
+So a workflow marks those steps, and inline mode hands them back flagged
+for a separate reviewer instead of quietly to the author. The block
+records who answered each one. When nobody else could, the step still
+completes, because blocking would push people back to working by hand,
+but the run says `self_reviewed` and the caller reports it that way. An
+honest "self-reviewed" is worth more than a review that only looks
+independent.
+
 ## Why one shared block, copied
 
 Workflow scripts cannot import code, so the block is copied into each

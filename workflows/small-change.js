@@ -11,12 +11,13 @@ export const meta = {
   ],
 }
 
-// --- run-modes v1 begin ---
+// --- run-modes v2 begin ---
 const RUN = ((a, realAgent, realPhase, realLog) => {
   const opted = !!(a && typeof a === 'object' && a.run && typeof a.run === 'object')
   const c = opted ? a.run : {}
   const mode = c.mode === 'inline' ? 'inline' : 'agents'
   const results = c.results && typeof c.results === 'object' ? c.results : {}
+  const reviewers = c.reviewers && typeof c.reviewers === 'object' ? c.reviewers : {}
   const only = Array.isArray(c.only) && c.only.length ? c.only.map(String) : null
   const from = c.from ? String(c.from) : null
   const titles = typeof meta !== 'undefined' && meta && Array.isArray(meta.phases) ? meta.phases.map((p) => p.title) : []
@@ -36,6 +37,10 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
   }
   const seen = {}
   const out = {}
+  // Who answered each step marked independent: "subagent" when this run
+  // spawned it, else the reviewer named in run.reviewers, else "self".
+  const by = {}
+  const who = (k) => (typeof reviewers[k] === 'string' && reviewers[k].trim() ? reviewers[k].trim() : 'self')
   const skipped = []
   const next = []
   const logs = []
@@ -47,6 +52,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
   const picked = (ph, label) => reached && (!only || only.some((s) => s === ph || s === label || label.startsWith(s + ':')))
   const agent = (prompt, opts) => {
     const op = opts || {}
+    const independent = op.independent === true
     const ph = op.phase || current
     const base = op.label || ph || 'agent'
     seen[base] = (seen[base] || 0) + 1
@@ -54,14 +60,22 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     let note = null
     if (has(results, key)) {
       const gap = missing(results[key], op.schema)
-      if (!gap) { out[key] = results[key]; return Promise.resolve(results[key]) }
+      if (!gap) { out[key] = results[key]; if (independent) by[key] = who(key); return Promise.resolve(results[key]) }
       note = `answer missing ${gap}; answer this brief again`
     }
     if (!picked(ph, base)) { skipped.push(key); return Promise.resolve(null) }
     if (mode === 'agents') {
-      return realAgent(prompt, opts).then((r) => { if (r !== null && r !== undefined) out[key] = r; return r })
+      const pass = Object.assign({}, op)
+      delete pass.independent
+      return realAgent(prompt, opts ? pass : opts).then((r) => {
+        if (r !== null && r !== undefined) { out[key] = r; if (independent) by[key] = 'subagent' }
+        return r
+      })
     }
-    next.push(note ? { key, phase: ph, prompt, schema: op.schema || null, note } : { key, phase: ph, prompt, schema: op.schema || null })
+    const brief = { key, phase: ph, prompt, schema: op.schema || null }
+    if (independent) brief.independent = true
+    if (note) brief.note = note
+    next.push(brief)
     if (!halting) {
       halting = true
       // Wait 200 microtask turns before pausing, so every sibling in a
@@ -74,19 +88,20 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
   const log = (m) => { logs.push(String(m)); return realLog(m) }
   const finish = (value) => {
     if (!opted) return value
+    const self_reviewed = Object.keys(by).filter((k) => by[k] === 'self')
     if (value === '__run_halted__') {
       return {
-        run: 'inline', status: 'next', next, results: out, skipped, logs,
-        how: 'Do each brief in next yourself, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args and run.results set to the merged results. Repeat until status is "done".',
+        run: 'inline', status: 'next', next, results: out, reviewers: by, self_reviewed, skipped, logs,
+        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done".',
       }
     }
-    return { run: mode, status: 'done', result: value, results: out, skipped, logs }
+    return { run: mode, status: 'done', result: value, results: out, reviewers: by, self_reviewed, skipped, logs }
   }
   return { agent, phase, log, finish, halted, error }
 })(typeof args === 'undefined' ? undefined : args, agent, phase, log)
 if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
-// --- run-modes v1 end (workflow body follows; close it with the tail line) ---
+// --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
 const USAGE = 'usage: small-change { change: "<what to change and why>", type: "<optional>", scope: "<optional>" } to open; small-change { pr: "<number or URL>", merge: true } to merge once the reviewer has passed it'
 if (!args || (!args.change && !(args.pr && args.merge))) return USAGE
@@ -201,7 +216,7 @@ phase('Check')
 const reviewPrompt = `Act as an independent reviewer of the draft PR ${c.pr_url || 'on ' + s.branch} for "${change}". Do not edit anything.
 Read the whole diff. Check: it does only what was asked and nothing else; it is still small (one concern, no behaviour or contract change); the title is a valid Conventional Commit of the right type; license headers are present where the project requires them; lockfiles or generated files were regenerated by tooling, not hand-edited; docs that reference what changed (an index, a version, a path) still match.
 List blocking problems only where you can point to a realistic failure or a broken rule; list other suggestions separately.`
-let r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 'review' })
+let r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 'review', independent: true })
 if (!r) return `blocked: review of ${c.pr_url || s.branch} returned nothing; the PR is unverified and stays draft`
 if ((r.blocking || []).length) {
   const fixed = await agent(
@@ -210,7 +225,7 @@ ${list(r.blocking)}`,
     { phase: 'Check', label: 'fix' },
   )
   if (!fixed) log('fix agent returned nothing; re-reviewing the branch as it stands')
-  r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 're-review' })
+  r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 're-review', independent: true })
   if (!r || (r.blocking || []).length) {
     return `blocked: ${c.pr_url || s.branch} still has open items after one fix round:\n${list(r ? r.blocking : ['re-review returned nothing'])}\nA change that needs more than one round is probably not small; consider deliver-package.`
   }

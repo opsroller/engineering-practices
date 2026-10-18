@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const BEGIN = '// --- run-modes v'
-const END = '// --- run-modes v1 end'
+const END = '// --- run-modes v2 end'
 const here = dirname(fileURLToPath(import.meta.url))
 const shim = readFileSync(join(here, 'run-modes.js'), 'utf8').split('\n')
 const b = shim.findIndex((l) => l.startsWith(BEGIN))
@@ -34,6 +34,6 @@ for (const f of files) {
   while (lines.length && lines[lines.length - 1] === '') lines.pop()
   lines.push(tail)
   writeFileSync(f, lines.join('\n') + '\n')
-  console.log(`${f}: run-modes v1 applied`)
+  console.log(`${f}: run-modes v2 applied`)
 }
 process.exit(failed ? 1 : 0)

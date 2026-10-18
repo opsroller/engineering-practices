@@ -5,13 +5,30 @@
 // '{"ci":"green","state":"passed"}', to steer a workflow down its full path.
 // Spec: docs/reference/workflow-run-modes.md
 import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
 const [file, rawArgs, rawFields] = process.argv.slice(2)
 if (!file) { console.error("usage: node tools/check-workflow.mjs <workflow.js> '<args JSON>'"); process.exit(2) }
 const userArgs = rawArgs ? JSON.parse(rawArgs) : undefined
 const fields = rawFields ? JSON.parse(rawFields) : {}
-const src = readFileSync(file, 'utf8').replace(/^export const meta/m, 'const meta')
+const raw = readFileSync(file, 'utf8')
+const src = raw.replace(/^export const meta/m, 'const meta')
+
+// The workflow must carry the current canonical block, unedited.
+const shim = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'run-modes.js'), 'utf8').split('\n')
+const blockOf = (lines) => {
+  const b = lines.findIndex((l) => l.startsWith('// --- run-modes v') && l.includes(' begin'))
+  const e = lines.findIndex((l, i) => i > b && l.startsWith('// --- run-modes v') && l.includes(' end'))
+  return b < 0 || e < 0 ? null : lines.slice(b, e + 1).join('\n')
+}
+const canonical = blockOf(shim)
+const version = (canonical.match(/run-modes (v\d+)/) || [])[1]
+
+// A prompt that asks for a review of work the run produced must be marked
+// independent, so inline mode routes it away from the author.
+const REVIEW_LIKE = /\bindependent(ly)?\s+(review|check|read|reviewer)|\bact as an? (independent )?reviewer|\byou did not write\b|\bfresh (read|reviewer)\b|\bmust not assume (its|the) intent/i
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 const fn = new AsyncFunction('args', 'agent', 'phase', 'log', 'pipeline', 'parallel', 'budget', src)
 
@@ -44,7 +61,7 @@ const budget = { total: null, spent: () => 0, remaining: () => Infinity }
 async function run(runOpts) {
   const calls = []
   const agent = async (prompt, opts = {}) => {
-    calls.push({ label: opts.label, phase: opts.phase })
+    calls.push({ label: opts.label, phase: opts.phase, prompt })
     if (typeof prompt !== 'string' || /\[object Object\]/.test(prompt)) throw new Error(`bad prompt for ${opts.label}: ${String(prompt).slice(0, 200)}`)
     return fake(opts.schema, opts.label)
   }
@@ -66,6 +83,14 @@ async function checkAll() {
   const env = await run({})
   if (env.out.status !== 'done' || !isDeepStrictEqual(env.out.result, base.out)) fail('run: {} must return { status: "done", result } with the same result as a plain run')
   if (env.calls.length !== base.calls.length) fail('run: {} changed which agents ran')
+  // The block keeps the independent flag from the runtime, so the agents-mode
+  // envelope is where the checker learns which steps carry it.
+  const marked = new Set(Object.keys(env.out.reviewers || {}))
+  const indep = [...marked].sort()
+  if (Object.values(env.out.reviewers || {}).some((v) => v !== 'subagent')) fail(`agents mode must record every independent step as "subagent": ${JSON.stringify(env.out.reviewers)}`)
+  const unmarked = env.calls.filter((c) => !marked.has(c.label) && REVIEW_LIKE.test(c.prompt)).map((c) => c.label)
+  if (unmarked.length) fail(`review steps not marked independent: ${unmarked.join(', ')}; pass { independent: true } in their agent() options`)
+  if ((env.out.self_reviewed || []).length) fail('agents mode must report no self-reviewed steps')
 
   let results = {}
   let steps = 0
@@ -78,6 +103,7 @@ async function checkAll() {
     const answers = {}
     for (const n of inl.next) {
       if (typeof n.prompt !== 'string') fail(`inline brief ${n.key} has no prompt`)
+      if (marked.has(n.key) !== (n.independent === true)) fail(`inline brief ${n.key} must ${marked.has(n.key) ? '' : 'not '}be marked independent`)
       answers[n.key] = fake(n.schema, n.key)
     }
     const probe = !probed && inl.next.find((n) => n.schema && n.schema.type === 'object' && (n.schema.required || []).length)
@@ -93,6 +119,14 @@ async function checkAll() {
   if (inl && inl.status === 'done') {
     if (!isDeepStrictEqual(inl.result, base.out)) fail('inline mode result differs from agents mode')
     if (!isDeepStrictEqual(Object.keys(inl.results).sort(), labels.filter(Boolean).sort())) fail(`inline keys ${Object.keys(inl.results)} differ from agent labels ${labels}`)
+    // Answered in session with no reviewer named: every independent step is self-reviewed.
+    if (!isDeepStrictEqual([...(inl.self_reviewed || [])].sort(), indep)) fail(`inline self_reviewed ${JSON.stringify(inl.self_reviewed)} must list the independent steps ${JSON.stringify(indep)}`)
+    if (indep.length) {
+      const named = Object.fromEntries(indep.map((k) => [k, 'code-reviewer']))
+      const routed = (await run({ mode: 'inline', results: inl.results, reviewers: named })).out
+      if ((routed.self_reviewed || []).length || !isDeepStrictEqual(routed.reviewers, named)) fail('inline steps with a reviewer named in run.reviewers must not be reported as self-reviewed')
+      if (!isDeepStrictEqual(routed.result, base.out)) fail('naming reviewers changed the result')
+    }
   }
 
   const resumed = await run({ results: env.out.results })
@@ -108,9 +142,10 @@ async function checkAll() {
   }
   const bad = await run({ from: 'No such phase' })
   if (titles.length && typeof bad.out !== 'string') fail('run.from with an unknown phase must return an error string')
-  return `${base.calls.length} agent(s), inline in ${steps} step(s); labels: ${labels.join(', ')}`
+  return `${base.calls.length} agent(s), inline in ${steps} step(s); labels: ${labels.join(', ')}; independent: ${indep.join(', ') || 'none'}`
 }
 
+if (blockOf(raw.split('\n')) !== canonical) fail(`run-modes block is missing, edited or older than ${version}; refresh it with node tools/apply-run-modes.mjs ${file}`)
 const report = []
 for (variant of ['clean', 'block']) report.push(`${variant} answers: ${await checkAll()}`)
 if (!process.exitCode) console.log(`ok ${file}\n  ${report.join('\n  ')}`)

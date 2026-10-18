@@ -7,7 +7,7 @@ your own session, with no subagents.
 
 ## Prerequisites
 
-- The role plugin is installed and its workflows carry run modes v1
+- The role plugin is installed and its workflows carry run modes v1 or later (v2 adds independent review steps)
   (the reference page of the workflow links to the run-modes reference).
 
 ## Steps
@@ -22,15 +22,23 @@ your own session, with no subagents.
    `prompt` says in this session. If it has a `schema`, write your
    answer as JSON that matches it.
 
-3. Put each answer into `results` under the brief's `key`, keeping the
-   `results` the workflow returned, and run it again:
+3. If a brief has `independent: true`, do not answer it yourself: it
+   reviews the work you just did. Send its prompt to a reviewer who had
+   no part in the work (the project's code-reviewer role, a fresh
+   session, or a fresh subagent), take their answer, and note who it was.
+
+4. Put each answer into `results` under the brief's `key`, and each
+   reviewer's name into `reviewers` under the same key, keeping what the
+   workflow returned, and run it again:
 
    ```
-   /ui-developer:screen-audit {"screens": ["title", "pause"], "run": {"mode": "inline", "results": {"plan": {...}, "title": {...}, "pause": {...}}}}
+   /ui-developer:screen-audit {"screens": ["title", "pause"], "run": {"mode": "inline", "results": {"plan": {...}, "title": {...}, "pause": {...}}, "reviewers": {"review": "code-reviewer thread"}}}}
    ```
 
-4. Repeat step 3 until the workflow returns `status: "done"`. Use its
-   `result` as you would the multi-agent result.
+5. Repeat steps 3 and 4 until the workflow returns `status: "done"`. Use
+   its `result` as you would the multi-agent result. If `self_reviewed`
+   lists any step, say in the PR and your report that it was
+   self-reviewed.
 
 ## Run only part of a workflow
 
@@ -43,7 +51,7 @@ steps those depend on in `results`, or they count as failed:
 
 ## Resume a run that stopped
 
-Run it again with the `results` the last run returned and, if you want
+Run it again with the `results` and `reviewers` the last run returned and, if you want
 to skip ahead, `from` set to the phase to restart at. Delete the key of
 any step you want redone.
 
@@ -51,7 +59,8 @@ any step you want redone.
 
 Open the workflow file and do each `agent()` prompt in order, filling in
 the args and the answers of earlier steps, and follow its branches and
-loop caps as written.
+loop caps as written. Give any call with `independent: true` to a separate
+reviewer, as in step 3.
 
 See the [run-modes reference](../reference/workflow-run-modes.md) for
 every field and the return envelope.

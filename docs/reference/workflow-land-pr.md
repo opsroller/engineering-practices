@@ -8,7 +8,7 @@ squash merge.
 | File | `workflows/land-pr.js` |
 | Command | `/engineering-practices:land-pr` |
 | Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }` |
-| Run modes | v1: optional `run` arg for inline, partial or resumed runs; see [workflow run modes](workflow-run-modes.md) |
+| Run modes | v2: optional `run` arg for inline, partial or resumed runs (no independent steps); see [workflow run modes](workflow-run-modes.md) |
 | Use when | The work is already on a branch or PR (yours, an assigned branch, or one handed over) and needs to be kept current and landed |
 | Run again | Safe to re-run at any point; each run starts from the PR's current state |
 

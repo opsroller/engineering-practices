@@ -8,7 +8,7 @@ Reference, for anyone landing a chore-sized change through the workflow.
 | Command | `/engineering-practices:small-change` |
 | Open args | `{ change: "<what to change and why>" (required), type: "<Conventional Commit type>" (optional), scope: "<scope>" (optional) }` |
 | Merge args | `{ pr: "<number or URL>" (required), merge: true (required) }` |
-| Run modes | v1: optional `run` arg for inline, partial or resumed runs; see [workflow run modes](workflow-run-modes.md) |
+| Run modes | v2: optional `run` arg for inline, partial or resumed runs, with review steps marked independent; see [workflow run modes](workflow-run-modes.md) |
 | Fits | One concern in a few lines: a config line, a dependency bump that needs no code changes, a docs index or link fix, a version string |
 | Does not fit | New behaviour, a shared contract or public interface change, anything needing new tests or a new doc page; use [deliver-package](workflow-deliver-package.md) |
 
