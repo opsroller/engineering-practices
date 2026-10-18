@@ -82,7 +82,16 @@ Message and type details: [commit-reference.md](commit-reference.md).
   Do not wait on the owner.
 - Check the squash message: the PR title as subject; body trimmed to the
   why plus footers (`Refs:`, `BREAKING CHANGE:`, co-author trailers).
+- **Check CI yourself.** Poll the checks on the PR's latest head commit
+  (for example `gh pr checks <pr> --watch --fail-fast`); never wait for a
+  notification to say CI finished or a review arrived.
+- **Update right before merging**: bring the latest default branch in
+  (rebase with `--force-with-lease` on a branch only you push to,
+  otherwise merge it in), let CI run on the new head, then merge. This
+  avoids landing on a base nobody tested and repeated conflicts.
 - Delete the branch after merging. Tell dependants (`peer-coordination`).
+- For a chore-sized change (a config line, a dependency bump, a docs
+  index fix) the `small-change` workflow runs this whole section.
 
 ## Trunk is red
 
