@@ -65,8 +65,8 @@ not usable` result, with the usage string:
 
 | Field | Required | Meaning |
 |---|---|---|
-| `branch` | one of `branch`, `pr` | Branch holding the built work |
-| `pr` | one of `branch`, `pr` | Open PR for that branch |
+| `branch` | one of `branch`, `pr`, here or as a top-level arg | Branch holding the built work |
+| `pr` | one of `branch`, `pr`, here or as a top-level arg | Open PR for that branch |
 | `tests_pass` | yes, must be `true` | The project's tests pass on the branch head |
 | `from` | no | Workflow that built it, e.g. `<plugin>:<workflow>` |
 | `docs` | no; a list when given | Docs pages already written in the branch |
@@ -74,7 +74,13 @@ not usable` result, with the usage string:
 | `non_original` | no; a list when given | Non-original items added, for the provenance check |
 | `notes` | no | Informational notes for the reviewer; never blocking |
 
-An explicit `branch` or `pr` arg wins over the one in `prior`.
+An explicit `branch` or `pr` arg wins over the one in `prior`, and fills
+it in when the handoff has none (a role workflow that does not know its
+branch).
+
+A role workflow that builds work for a package should return a
+`handoff` with at least `from`, `branch` (or `pr`), `tests_pass` and
+`docs`, so its result can be passed as `prior` as it is.
 
 ## Step labels
 

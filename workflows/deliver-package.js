@@ -92,7 +92,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     if (value === '__run_halted__') {
       return {
         run: 'inline', status: 'next', next, results: out, reviewers: by, self_reviewed, skipped, logs,
-        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done".',
+        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done". To avoid pasting results back on every call, drive the run with engineering-practices tools/run-inline.mjs and a state file instead: it stores each answer and prints only the next briefs.',
       }
     }
     return { run: mode, status: 'done', result: value, results: out, reviewers: by, self_reviewed, skipped, logs }
@@ -122,12 +122,15 @@ const unwrap = (o) => {
   if (o.handoff && typeof o.handoff === 'object') return o.handoff
   return o
 }
-const prior = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
+const unwrapped = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
+// The top-level branch and pr fill in a handoff that lacks them, so a role
+// result with no branch of its own can still be shipped.
+const prior = unwrapped && { ...unwrapped, branch: unwrapped.branch || args.branch, pr: unwrapped.pr || args.pr }
 if (args.prior !== undefined && args.prior !== null) {
-  if (!prior) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
+  if (!unwrapped) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
   // Report every problem with the handoff at once, not one per run.
   const bad = []
-  if (!prior.branch && !prior.pr) bad.push('names no branch or pr, so there is no built work to ship')
+  if (!prior.branch && !prior.pr) bad.push('names no branch or pr, and none was given as a top-level branch or pr arg, so there is no built work to ship')
   if (prior.tests_pass !== true) bad.push(`does not report tests_pass: true (got ${JSON.stringify(prior.tests_pass)}); finish the work in ${prior.from || 'the role workflow'} first`)
   for (const k of ['docs', 'undocumented', 'non_original']) {
     if (prior[k] !== undefined && !Array.isArray(prior[k])) bad.push(`${k} must be a list, got ${typeof prior[k]}`)
