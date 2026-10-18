@@ -74,7 +74,7 @@ runs the workflow again. Only a session without such a tool uses one
 bounded watch command (up to 20 minutes). It fixes red CI caused by the
 PR or the merge, two attempts at most.
 
-### One failing job
+## One failing job
 
 When exactly one job or matrix leg fails (one browser, one OS, one
 shard), the same tests pass on the other legs, and the log points
