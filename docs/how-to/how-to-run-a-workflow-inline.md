@@ -85,11 +85,17 @@ runner, which keeps args and answers in a JSON file:
    node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer review=- --reviewer 'review=code-reviewer thread' < reply.txt
    ```
 
-   An answer that lacks a required field stops the call with exit 2 and
-   records nothing; have the reviewer fix it and run again.
+   An answer that lacks a required field, has a field of the wrong type
+   or outside its allowed values, or names no waiting step stops the
+   call with exit 2, says which fields are wrong and records nothing;
+   fix the answer (or have the reviewer fix it) and run again.
 
 5. Repeat steps 2 to 4 until it prints `status: done` and the result.
-   To redo a step, add `--redo <key>`. When the result asks for a later
+   To redo a step, add `--redo <key>`. If the result starts with
+   `blocked:` (or another stop), fix what it names, then run the
+   `--redo` command the runner prints under the result: it asks the
+   step that stopped the run again and keeps the answers before it.
+   When the result asks for a later
    run (`waiting:` on CI, or a land-pr waiting on its reviewer), schedule
    your check-in, then run it again with `--fresh`: it keeps the args and
    drops the stored answers, so nothing from before the wait is replayed.

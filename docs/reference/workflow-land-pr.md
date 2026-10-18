@@ -18,7 +18,7 @@ squash merge.
 |---|---|
 | Adopt | Reads the default branch from the remote; finds the PR for the branch, or opens a draft one; confirms you can push to the head branch; names the local check |
 | Follow-up | Only with `followup`: checks out the head branch at its remote tip, makes the smallest edit, runs the local check, commits (Conventional Commit), pushes, adds a line to the PR description. Stops if the change needs new behaviour, a contract change or a new doc page |
-| Sync | Merges the latest default branch in, resolves conflicts, applies [cross-PR items](#cross-pr-items), re-runs the local check, pushes, polls CI, [re-runs one failing job once](#one-failing-job) and handles [checks red on the default branch too](#red-on-the-default-branch); repeats if the default branch moved meanwhile (3 rounds at most) |
+| Sync | Merges the latest default branch in (always when the host reports the PR as conflicting, and [before every CI wait](#base-current-before-ci)), resolves conflicts, applies [cross-PR items](#cross-pr-items), re-runs the local check, pushes, polls CI, [re-runs one failing job once](#one-failing-job) and handles [checks red on the default branch too](#red-on-the-default-branch); repeats if the default branch moved meanwhile (3 rounds at most) |
 | Review | Reads the reviewer verdict; [carries a pass](#reviewer-pass) across keep-both merges with the merge diff posted to the reviewer; asks for review of the delta (and marks the PR ready) if a new pass is needed and nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
 | Close | Only with `row` or `notify`: reads the status row on the default branch and, if it does not read the project's merged-state value, sets it (a direct commit only where the project allows it, otherwise small-change); messages each `notify` target once with the PR link and squash SHA (agent sessions by cross-session message, people by mention; never the project owner) |
@@ -74,6 +74,26 @@ or scheduled-task tool) reports `pending` at once; the run returns
 runs the workflow again. Only a session without such a tool uses one
 bounded watch command (up to 20 minutes). It fixes red CI caused by the
 PR or the merge, two attempts at most.
+
+## Base current before CI
+
+Before it waits on CI, and at each poll, the agent reads the PR's merge
+state from the hosting service and fetches the branch the PR targets.
+
+| Host reports | Why it matters | Before polling |
+|---|---|---|
+| Conflicting (`mergeable_state` "dirty", `CONFLICTING`) | A push to a conflicting PR gets no CI run at all, so a wait never ends | Merge the base in |
+| Behind (the base has commits the head lacks) | CI runs against a stale base and may hang or pass on code that will not land | Merge the base in |
+| Neither | | Poll CI for the current head |
+
+On a branch someone else owns or also pushes to, the merge is always a
+merge commit; on the author's own branch it follows the repository's
+convention (a rebase only where the profile requires one). Conflicts
+follow the [conflict rules](#conflict-rules); files that cannot be
+resolved go under `unresolved` and the run stops. After the merge the
+agent runs the local check, pushes and polls CI for the new head SHA.
+small-change and deliver-package apply the same rule before their CI
+waits.
 
 ## One failing job
 

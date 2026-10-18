@@ -84,7 +84,7 @@ this brief again"`; in agents mode the step runs again.
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
 | `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file\|->]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file and collects reviewers' answer files, and `--review-prompt <key>` prints the reviewer prompt of an independent brief; see [State file runner](#state-file-runner) |
-| `tools/test-run-inline.mjs` | `node tools/test-run-inline.mjs` self-tests the runner on a two-step fixture: answer-file collection, handback parsing, schema checks, `--fresh` and stale files |
+| `tools/test-run-inline.mjs` | `node tools/test-run-inline.mjs` self-tests the runner on a two-step fixture: answer-file collection, handback parsing, schema checks on every answer (required fields, types, enums, a step not waiting), the resume command of a blocked run, `--fresh` and stale files |
 | `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
@@ -99,7 +99,7 @@ same as driving the Workflow tool by hand.
 | Flag | Effect |
 |---|---|
 | `--args '<JSON>'`, `--args-file <file>` | The workflow's own args (with any `run.only` or `run.from`); needed on the first call, stored for later ones |
-| `--answer <key>=<file>`, `--answer <key>=-` | Stores the file's content (or stdin, with `-`; once per call, a second `-` exits 2) under `key`. For a waiting brief with a schema: parsed as JSON, else the last fenced JSON block, else the outermost `{...}`, so a reviewer's whole reply can be passed as handed back; an answer that is not an object or lacks a required field exits 2 and records nothing. For a waiting text brief: the trimmed text, verbatim. For a key not waiting: JSON when the whole text is JSON, else trimmed text |
+| `--answer <key>=<file>`, `--answer <key>=-` | Stores the file's content (or stdin, with `-`; once per call, a second `-` exits 2) under `key`. For a waiting brief with a schema: parsed as JSON, else the last fenced JSON block, else the outermost `{...}`, so a reviewer's whole reply can be passed as handed back. For a waiting text brief: the trimmed text, verbatim. A key not waiting is parsed against the schema it was last asked with (as after `--redo`), else as JSON when the whole text is JSON, else trimmed text. Every answer is checked as in [answer validation](#answer-validation) |
 | `--reviewer <key>=<name>` | Records who answered an independent step; required on the call that collects its answer file |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
 | `--fresh` | Drops every stored answer and keeps the args: use it to run again after a check-in, when the result said to (`waiting:`, `not merged:` or a `next` that says run again) |
@@ -112,9 +112,44 @@ pending, waiting on a reviewer) is a finished run; the runner prints the
 `--fresh` command for the next one, since a stored answer from before the
 check-in would otherwise be replayed.
 
-An `--answer` for a step the run does not reach on this call is not kept:
-the state file stores the run's own `results`, and the step is asked
-for again in `next` once the run reaches it.
+### Answer validation
+
+Each `--answer`, and each collected answer file, is checked against the
+step's schema (`next[].schema`, or for a key not waiting the schema it
+was last asked with, kept in the state file's `schemas`). The call exits
+2, names every problem, records nothing and leaves the state file
+unchanged when:
+
+| Problem | Message names |
+|---|---|
+| Not a JSON object, for an object schema | `not a JSON object` |
+| A required field is missing | `missing <fields>` |
+| A field has the wrong type (`string`, `number`, `integer`, `boolean`, `array`, `object`, `null`) | `<field> must be <type>, got <type>` |
+| A field is outside its `enum` | `<field> must be one of <values>, got <value>` |
+| An array item has the wrong type (`items.type`) | `<field>[<i>] must be <type>, got <type>` |
+| The run asks for an answer given on this call again (a step reached only on this call, checked by the run-modes block) | `answer for "<key>" does not fit its schema (answer missing <fields>; ...)` |
+| No step with that key is waiting or reached on this call | `no step "<key>" is waiting or reached on this call; waiting: <keys>` |
+
+So an answer is never dropped in silence: it is used on this call or
+the call fails.
+
+### Stopped run
+
+A run that finishes with a result starting `blocked`, `changes
+requested` or `failed` (or an object with `blocked: true` or a `status`
+starting `blocked`) stopped short. After the result the runner prints
+how to resume once the cause is fixed:
+
+```
+This run stopped before the end. Fix the cause it names, then resume:
+  node tools/run-inline.mjs <workflow.js> <state.json> --redo '<key>'
+  node tools/run-inline.mjs <workflow.js> <state.json> --fresh
+```
+
+`<key>` is the last step answered, the one whose answer led to the
+result: `--redo` asks it again and replays every answer before it. Add
+`--redo` for any earlier step that must change too, or use `--fresh` to
+start over from the first step with the same args.
 
 For each independent brief in `next`, the runner also writes a
 self-contained reviewer prompt to `<state.json>.review/<key>.md` (the key
@@ -149,11 +184,12 @@ renamed to `<file>.stale` first, so an old answer is never taken for a
 new brief. Briefs that are not independent get no file and print as
 before.
 
-Each call rewrites the state file with the merged `results`,
-`reviewers`, `status` and the full `next` briefs (schemas included), and
+Each call that is not rejected rewrites the state file with the merged
+`results`, `reviewers`, `status`, the full `next` briefs (schemas
+included) and `schemas` (the last schema asked under each key), and
 prints a summary: for `next`, each brief's key, phase, independence,
 note, required fields and prompt; for `done`, any `self_reviewed` keys
-and the result. A workflow that returns before the run-modes block wraps
+and the result, with the resume commands of a [stopped run](#stopped-run). A workflow that returns before the run-modes block wraps
 its result (a usage or argument error) prints that and exits 1.
 
 It runs the workflow file with Node, with full file access, so use it

@@ -9,7 +9,10 @@
 // Each independent brief is also written as a ready reviewer prompt to
 // <state.json>.review/<key>.md; --review-prompt prints one to stdout. The
 // reviewer writes its answer to <key>.answer.json (or .txt) next to it, and
-// the next call collects that file by itself.
+// the next call collects that file by itself. Every answer is checked
+// against its step's schema; one that does not fit, or names no step the
+// run reaches, exits 2 and leaves the state file as it was. A run that
+// stops short prints the --redo command that resumes it.
 // Spec: docs/reference/workflow-run-modes.md, "State file runner".
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -52,15 +55,34 @@ const parseAnswer = (text, n) => {
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)) } catch {} }
   return t
 }
-// Same rule the run-modes block applies: an object answer carries every
-// required field. Checked here so a bad handback fails loudly, not as a re-ask.
+// The run-modes block's rule (an object answer carries every required
+// field), plus the declared type and enum of each field given, checked
+// here so a wrong-shaped answer fails loudly, not as a silent re-ask.
+const typeOf = (x) => (x === null ? 'null' : Array.isArray(x) ? 'array' : typeof x)
+const fits = (x, t) => (t === 'integer' ? Number.isInteger(x) : t === typeOf(x))
 const answerGap = (v, schema) => {
   if (!schema || schema.type !== 'object') return null
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'not a JSON object'
-  const gap = (schema.required || []).filter((k) => !(k in v) || v[k] === undefined)
-  return gap.length ? `missing ${gap.join(', ')}` : null
+  const gaps = []
+  const miss = (schema.required || []).filter((k) => !(k in v) || v[k] === undefined)
+  if (miss.length) gaps.push(`missing ${miss.join(', ')}`)
+  for (const [k, p] of Object.entries(schema.properties || {})) {
+    if (!(k in v) || !p) continue
+    const types = [].concat(p.type || [])
+    if (types.length && !types.some((t) => fits(v[k], t))) { gaps.push(`${k} must be ${types.join(' or ')}, got ${typeOf(v[k])}`); continue }
+    if (Array.isArray(p.enum) && !p.enum.includes(v[k])) gaps.push(`${k} must be one of ${p.enum.map((e) => JSON.stringify(e)).join(', ')}, got ${JSON.stringify(v[k])}`)
+    const it = p.items && p.items.type
+    if (it && Array.isArray(v[k])) {
+      const bad = v[k].findIndex((e) => !fits(e, it))
+      if (bad >= 0) gaps.push(`${k}[${bad}] must be ${it}, got ${typeOf(v[k][bad])}`)
+    }
+  }
+  return gaps.length ? gaps.join('; ') : null
 }
-const waiting = (k) => (state.next || []).find((b) => b.key === k)
+// The brief an answer is for: the one waiting, else the last brief asked
+// under that key (kept in state.schemas, so a --redo answer is checked too).
+const schemas = state.schemas && typeof state.schemas === 'object' ? state.schemas : {}
+const waiting = (k) => (state.next || []).find((b) => b.key === k) || (k in schemas ? { key: k, schema: schemas[k] } : undefined)
 const reviewText = (n) => [
   `# Independent review: ${n.key} (phase ${n.phase})`,
   '',
@@ -177,10 +199,23 @@ if (!out || typeof out !== 'object' || !out.status) {
   console.log(typeof out === 'string' ? out : JSON.stringify(out, null, 2))
   process.exit(1)
 }
+// Every --answer must be used by this call. One the run asked for again
+// did not fit its schema; one the run never reached names no waiting step.
+// Either way stop before writing, so the state file stays as it was.
+const rejected = [...given].map((k) => {
+  const again = out.status === 'next' && out.next.find((n) => n.key === k)
+  if (again) return `answer for "${k}" does not fit its schema (${again.note || 'rejected'})`
+  if (!out.results || !(k in out.results)) return `no step "${k}" is waiting or reached on this call; waiting: ${(state.next || []).map((n) => n.key).join(', ') || 'none'}`
+  return null
+}).filter(Boolean)
+if (rejected.length) { console.error(`${rejected.join('\n')}\nnothing recorded; the state file is unchanged`); process.exit(2) }
+
 state.results = out.results || state.results
 state.reviewers = Object.assign({}, state.reviewers, out.reviewers || {})
 state.status = out.status
 state.next = out.status === 'next' ? out.next : []
+for (const n of state.next) schemas[n.key] = n.schema
+state.schemas = schemas
 writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n')
 
 if (out.status === 'done') {
@@ -189,6 +224,16 @@ if (out.status === 'done') {
   console.log(JSON.stringify(out.result, null, 2))
   const again = typeof out.result === 'string' ? /^(waiting|not merged)\b/.test(out.result) : !!(out.result && /\b(run (it |this |the workflow )?again|re-?run)\b/i.test(String(out.result.next || '')))
   if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  node ${process.argv[1]} ${file} ${statePath} --fresh`)
+  // A run that stopped short (blocked, changes requested, failed) resumes
+  // at the step whose answer stopped it, once its cause is fixed.
+  const r = out.result
+  const stopped = !again && (typeof r === 'string' ? /^(blocked|changes requested|failed)\b/i.test(r) : !!(r && typeof r === 'object' && (r.blocked === true || /^blocked\b/i.test(String(r.status || '')))))
+  if (stopped) {
+    const last = Object.keys(out.results || {}).pop()
+    console.log('\nThis run stopped before the end. Fix the cause it names, then resume:')
+    if (last) console.log(`  node ${process.argv[1]} ${file} ${statePath} --redo '${last}'\n(asks "${last}", the step whose answer stopped the run, again and replays every answer before it; add --redo for any earlier step that must also be redone)`)
+    console.log(`  node ${process.argv[1]} ${file} ${statePath} --fresh\n(starts over from the first step with the same args)`)
+  }
 } else {
   console.log(`status: next, ${out.next.length} brief(s). Do each, write its answer to a file, then run:`)
   console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.filter((n) => !n.independent).map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)

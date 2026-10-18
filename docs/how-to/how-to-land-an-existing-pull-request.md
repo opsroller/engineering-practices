@@ -45,6 +45,9 @@ merge without letting it drift behind the default branch.
    (`peer-coordination`), commit, and run it again. Items it could
    extend itself (a preset or workflow the default branch added that
    your change must also cover) are already committed on the branch.
+   If the host shows the PR as conflicting or behind its base, the
+   workflow merges the base in before it waits on CI: a conflicting PR
+   gets no CI run on new pushes.
    If CI shows one failing browser or OS leg, the workflow re-runs that
    job once; a pass is logged as a flake and listed in `flakes`.
    If a check is red or hung on the default branch too, the workflow
