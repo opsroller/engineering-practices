@@ -8,7 +8,8 @@ Commits, talk to other agents directly about contracts and hand-offs,
 ship only original or properly licensed material, and write the Diataxis
 docs each change owes in the same pull request. Its `package-lead` agent
 runs one work package end to end; the `small-change` workflow lands a
-chore-sized change from branch to squash merge.
+chore-sized change from branch to squash merge, and `land-pr` keeps an
+existing branch or PR current and squash-merges it.
 
 ## Install
 
@@ -26,12 +27,13 @@ walks through one package in a practice repository, step by step.
 [start work in a new project](docs/how-to/how-to-start-work-in-a-new-project.md),
 [deliver a work package](docs/how-to/how-to-deliver-a-work-package.md),
 [land a small change](docs/how-to/how-to-land-a-small-change.md),
+[land an existing pull request](docs/how-to/how-to-land-an-existing-pull-request.md),
 [change a shared contract](docs/how-to/how-to-change-a-shared-contract.md) and
 [add third-party material](docs/how-to/how-to-add-third-party-material.md).
 
 **Looking something up?** The [reference](docs/reference/index.md) lists the
-agent, each skill and the `deliver-package` and `small-change` workflows
-with their args and outputs; [SOURCES.md](SOURCES.md) lists the research behind the rules.
+agent, each skill and the `deliver-package`, `small-change` and `land-pr`
+workflows with their args and outputs; [SOURCES.md](SOURCES.md) lists the research behind the rules.
 
 **Wondering why?** [About engineering practices as a shared base](docs/explanation/about-the-role.md)
 explains the reasoning (trunk-based development, squash merge, who

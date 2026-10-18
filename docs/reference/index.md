@@ -2,10 +2,10 @@
 
 Reference, for anyone looking up what this plugin contains.
 
-The plugin has one agent, six skills and two workflows. Skills say how the
+The plugin has one agent, six skills and three workflows. Skills say how the
 team works around any job; the agent applies them to one work package;
 the workflows run those steps with an independent check, for a whole
-package or for one small change.
+package or for one small change, and land an existing branch or PR.
 
 ## Agent
 
@@ -32,13 +32,14 @@ Working with others:
 
 - [deliver-package](workflow-deliver-package.md): plan, build, document, check, ship one package.
 - [small-change](workflow-small-change.md): land one chore-sized change, from branch to squash merge.
+- [land-pr](workflow-land-pr.md): keep an existing branch or PR current, poll CI, squash-merge.
 
 ## Plugin manifest
 
 | Field | Value |
 |---|---|
 | `name` | `engineering-practices` |
-| `version` | `0.2.0` |
+| `version` | `0.3.0` |
 | `author.name` | `opsroller` |
 | `repository` | `https://github.com/opsroller/engineering-practices` |
 | `license` | `GPL-2.0-or-later` |

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'deliver-package',
-  description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>" }',
+  description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>" }',
   phases: [
     { title: 'Plan', detail: 'onboard, read the package and contracts, plan slices, stubs and affected Diataxis doc kinds' },
     { title: 'Build', detail: 'implement on the package branch with provenance recorded' },
@@ -11,11 +11,19 @@ export const meta = {
   ],
 }
 
-const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>" }'
+const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>" }'
 if (!args || !args.wp) return USAGE
 const wp = String(args.wp)
 const plan = args.plan ? String(args.plan) : "the project's work-package plan (path in CLAUDE.md or the project profile)"
 
+// Some agents may push only to a branch they were assigned, or pick up a
+// package someone already started; then the workflow reuses that branch
+// or PR instead of cutting wp/<id>-<slug>.
+const existing = args.pr
+  ? `Use the existing PR ${args.pr} and its head branch; do not create a new branch or PR.`
+  : args.branch
+    ? `Use the existing branch ${args.branch} (reuse its open PR if one exists); do not create a new branch.`
+    : ''
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
 
 const PLAN = {
@@ -83,7 +91,8 @@ phase('Plan')
 const p = await agent(
   `Follow the engineering-practices skills project-onboarding, work-packages and documentation for ${wp} in ${plan}.
 Read CLAUDE.md, the project profile, the package row and every contract it touches; run the baseline build and tests.
-Return: the branch name (wp/<id>-<slug>), owned paths, implementation steps as small slices, dependencies to stub against their contracts, the done-when line, the project's docs layout, and the Diataxis plan: for each thing the package will produce, use the compass (action/cognition x study/work) and the documentation skill's "what each kind of work owes" table to list the doc kind, the page to add or update, and why.
+${existing ? existing + ' Return that branch name, after confirming you can push to it and reading any work already on it.' : ''}
+Return: the branch name (${existing ? 'the existing one' : 'wp/<id>-<slug>'}), owned paths, implementation steps as small slices, dependencies to stub against their contracts, the done-when line, the project's docs layout, and the Diataxis plan: for each thing the package will produce, use the compass (action/cognition x study/work) and the documentation skill's "what each kind of work owes" table to list the doc kind, the page to add or update, and why.
 List anything that prevents starting (missing row, no testable done-when, missing contract) under blockers. Do not write code yet.`,
   { schema: PLAN, phase: 'Plan', label: 'plan' },
 )
@@ -101,7 +110,8 @@ ${list(p.steps)}
 Stub against the contracts: ${(p.stubs || []).join(', ') || 'none'}.
 Done when: ${p.done_when}
 License every new file under the project's license with its header rule, never a template default; log every non-original item in the provenance log.
-Commit with Conventional Commits, run the project's build and tests, push, and open a draft PR titled as a Conventional Commit with "Refs: ${wp}" in the body.
+${existing ? `${existing} Fetch it and build on the work already there; if it is behind the default branch, merge the default branch in first.` : `Cut ${p.branch} from the latest remote default branch.`}
+Commit with Conventional Commits, run the project's build and tests, push to ${p.branch}, and ${existing ? 'reuse its open PR (open a draft PR only if none exists), making sure the title is a Conventional Commit, with' : 'open a draft PR titled as a Conventional Commit with'} "Refs: ${wp}" in the body.
 Return the PR URL, whether tests pass, and the non-original items added.`,
   { schema: BUILD, phase: 'Build', label: 'build' },
 )
@@ -159,5 +169,5 @@ return {
   docs: d ? d.pages : ['unverified: docs agent returned nothing'],
   undocumented: d ? d.undocumented || [] : [],
   dependants: s.dependants || [],
-  next: 'after the code reviewer passes and CI is green, squash-merge, delete the branch, tell each dependant',
+  next: `after the code reviewer passes, run /engineering-practices:land-pr { pr: "${s.pr_url}" } (keeps the branch current, polls CI itself and squash-merges), then tell each dependant`,
 }
