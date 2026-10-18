@@ -4,14 +4,18 @@
 // Usage:
 //   node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>]
 //     [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]
+//   node tools/run-inline.mjs <workflow.js> <state.json> --review-prompt <key>
 // The first call needs the args; they are stored in the state file and reused.
+// Each independent brief is also written as a ready reviewer prompt to
+// <state.json>.review/<key>.md; --review-prompt prints one to stdout.
 // Spec: docs/reference/workflow-run-modes.md, "State file runner".
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 
 const argv = process.argv.slice(2)
 const [file, statePath] = argv
 if (!file || !statePath || file.startsWith('--') || statePath.startsWith('--')) {
-  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]")
+  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh] | --review-prompt <key>")
   process.exit(2)
 }
 const state = existsSync(statePath)
@@ -22,6 +26,40 @@ const pair = (s, flag) => {
   if (i < 1) { console.error(`${flag} needs <key>=<value>, got "${s}"`); process.exit(2) }
   return [s.slice(0, i), s.slice(i + 1)]
 }
+// A self-contained prompt for a fresh reviewer agent, one per independent
+// brief, kept next to the state file so the caller can hand it over as is.
+const reviewDir = resolve(`${statePath}.review`)
+const slug = (k) => k.replace(/[^A-Za-z0-9._-]/g, '_')
+const review = (n) => {
+  const base = join(reviewDir, slug(n.key))
+  return { prompt: `${base}.md`, answer: `${base}.answer.${n.schema ? 'json' : 'txt'}` }
+}
+const recordCmd = (n) => `node ${process.argv[1]} ${file} ${statePath} --answer '${n.key}=${review(n).answer}' --reviewer '${n.key}=<reviewer name>'`
+const reviewText = (n) => [
+  `# Independent review: ${n.key} (phase ${n.phase})`,
+  '',
+  'You are a reviewer with no part in the work below: you did not write, plan or change it. Only read and report. Change no files: do not edit, commit, push, comment on or merge anything, even where the brief would let you fix something; list it instead.',
+  '',
+  '## Brief',
+  '',
+  n.prompt,
+  '',
+  '## Answer',
+  '',
+  n.schema
+    ? `Reply with one JSON object and nothing else. It must match this schema and carry every required field (${(n.schema.required || []).join(', ') || 'none'}):\n\n\`\`\`json\n${JSON.stringify(n.schema, null, 2)}\n\`\`\``
+    : 'Reply with a short plain-text answer and nothing else.',
+  '',
+  '## For the caller, not the reviewer',
+  '',
+  `Save the reviewer's answer to ${review(n).answer} and record it, naming the reviewer, with:`,
+  '',
+  `    ${recordCmd(n)}`,
+  '',
+  'Reviewer: do not run this yourself.',
+  '',
+].join('\n')
+let reviewKey = null
 for (let i = 2; i < argv.length; i++) {
   const flag = argv[i]
   // A re-run after a check-in (CI pending, main moved, waiting on a
@@ -40,10 +78,26 @@ for (let i = 2; i < argv.length; i++) {
   } else if (flag === '--reviewer') {
     const [k, name] = pair(val, flag)
     state.reviewers[k] = name
+  } else if (flag === '--review-prompt') {
+    reviewKey = val
   } else if (flag === '--redo') {
     delete state.results[val]
     delete state.reviewers[val]
   } else { console.error(`unknown flag ${flag}`); process.exit(2) }
+}
+
+if (reviewKey !== null) {
+  // Print one stored independent brief as a reviewer prompt; runs nothing
+  // and leaves the state file as it is.
+  if (argv.length !== 4) { console.error('--review-prompt takes no other flags'); process.exit(2) }
+  const n = (state.next || []).find((b) => b.key === reviewKey)
+  if (!n || !n.independent) {
+    const keys = (state.next || []).filter((b) => b.independent).map((b) => b.key)
+    console.error(`no independent brief "${reviewKey}" waiting in ${statePath}; waiting: ${keys.join(', ') || 'none'}`)
+    process.exit(2)
+  }
+  process.stdout.write(reviewText(n))
+  process.exit(0)
 }
 
 const src = readFileSync(file, 'utf8').replace(/^export const meta/m, 'const meta')
@@ -84,6 +138,14 @@ if (out.status === 'done') {
   console.log(`status: next, ${out.next.length} brief(s). Do each, write its answer to a file, then run:`)
   console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)
   console.log('Add --reviewer \'<key>=<who>\' for each independent brief another reviewer answered.')
+  const independent = out.next.filter((n) => n.independent)
+  if (independent.length) {
+    mkdirSync(reviewDir, { recursive: true })
+    for (const n of independent) {
+      writeFileSync(review(n).prompt, reviewText(n))
+      console.log(`${n.key}: send ${review(n).prompt} to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '${n.key}'), save its ${n.schema ? 'JSON ' : ''}answer to ${review(n).answer}, then run: ${recordCmd(n)}`)
+    }
+  }
   for (const n of out.next) {
     const req = n.schema && n.schema.required ? n.schema.required.join(', ') : ''
     console.log(`\n=== ${n.key} (phase ${n.phase})${n.independent ? ' INDEPENDENT: send to a reviewer with no part in the work' : ''}`)
