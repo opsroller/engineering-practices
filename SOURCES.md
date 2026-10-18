@@ -28,3 +28,4 @@ Reference: the research behind this plugin, for maintainers checking where a rul
 | GitHub Docs: Keeping your pull request in sync with the base branch | https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/keeping-your-pull-request-in-sync-with-the-base-branch | Updating a PR branch by merge or rebase (`land-pr` sync step) |
 | Git documentation: git merge, union and merge strategies | https://git-scm.com/docs/git-merge | Merging the default branch in without rewriting pushed commits; conflict resolution (`land-pr`) |
 | Git documentation: gitattributes, `merge=union` | https://git-scm.com/docs/gitattributes | Union merge keeps both sides' lines, the model for shared-list conflicts (`land-pr`) |
+| Run modes (`workflow-run-modes`, `tools/`) | none | Project tooling, not research: built on the workflow runtime's own `agent()`, `phase()` and `args` contract, so no external source applies |

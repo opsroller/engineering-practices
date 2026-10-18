@@ -8,6 +8,7 @@ Reference, for anyone landing a chore-sized change through the workflow.
 | Command | `/engineering-practices:small-change` |
 | Open args | `{ change: "<what to change and why>" (required), type: "<Conventional Commit type>" (optional), scope: "<scope>" (optional) }` |
 | Merge args | `{ pr: "<number or URL>" (required), merge: true (required) }` |
+| Run modes | v1: optional `run` arg for inline, partial or resumed runs; see [workflow run modes](workflow-run-modes.md) |
 | Fits | One concern in a few lines: a config line, a dependency bump that needs no code changes, a docs index or link fix, a version string |
 | Does not fit | New behaviour, a shared contract or public interface change, anything needing new tests or a new doc page; use [deliver-package](workflow-deliver-package.md) |
 
@@ -20,6 +21,10 @@ Reference, for anyone landing a chore-sized change through the workflow.
 | Check | open | Independent read of the diff; one fix round at most |
 | Hand off | open | Polls CI itself until it settles, fixes red CI caused by the change (two attempts at most), marks the PR ready and asks the reviewer |
 | Merge | merge | Confirms the PR is out of draft, comments are answered and the reviewer passed the current head (per the profile's review convention); brings the latest default branch in; re-runs the local check and polls CI; squash-merges only after a conflict-free update; deletes the branch |
+
+## Step labels
+
+For `run.only` and `run.results`: `scope`, `change`, `review`, `fix`, `re-review`, `handoff`; with `merge: true`, `merge`.
 
 ## CI polling
 

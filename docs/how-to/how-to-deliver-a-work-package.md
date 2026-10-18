@@ -22,6 +22,10 @@ squash commit.
    started, add `"branch": "<name>"` or `"pr": "<number>"` to work there
    instead of a new `wp/` branch.
 
+   If your session cannot afford its subagents, add
+   `"run": {"mode": "inline"}` and do each step it hands back yourself
+   (see [how to run a workflow inline](how-to-run-a-workflow-inline.md)).
+
    If you would rather drive it yourself, hand the package to the
    `package-lead` agent and follow the same steps.
 

@@ -8,6 +8,7 @@ squash merge.
 | File | `workflows/land-pr.js` |
 | Command | `/engineering-practices:land-pr` |
 | Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }` |
+| Run modes | v1: optional `run` arg for inline, partial or resumed runs; see [workflow run modes](workflow-run-modes.md) |
 | Use when | The work is already on a branch or PR (yours, an assigned branch, or one handed over) and needs to be kept current and landed |
 | Run again | Safe to re-run at any point; each run starts from the PR's current state |
 
@@ -19,6 +20,11 @@ squash merge.
 | Sync | Merges the latest default branch in, resolves conflicts, re-runs the local check, pushes, polls CI; repeats if the default branch moved meanwhile (3 rounds at most) |
 | Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
+
+## Step labels
+
+For `run.only` and `run.results`: `adopt`, `sync:1` to `sync:3`, `review`, `merge`.
+Pass `results` only to resume the same run; a new land-pr run starts without them, because it re-reads the PR's current state.
 
 ## Conflict rules
 

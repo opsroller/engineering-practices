@@ -28,8 +28,10 @@ walks through one package in a practice repository, step by step.
 [deliver a work package](docs/how-to/how-to-deliver-a-work-package.md),
 [land a small change](docs/how-to/how-to-land-a-small-change.md),
 [land an existing pull request](docs/how-to/how-to-land-an-existing-pull-request.md),
-[change a shared contract](docs/how-to/how-to-change-a-shared-contract.md) and
-[add third-party material](docs/how-to/how-to-add-third-party-material.md).
+[change a shared contract](docs/how-to/how-to-change-a-shared-contract.md),
+[add third-party material](docs/how-to/how-to-add-third-party-material.md) and
+[run a workflow inline](docs/how-to/how-to-run-a-workflow-inline.md)
+when its subagents cost too much.
 
 **Looking something up?** The [reference](docs/reference/index.md) lists the
 agent, each skill and the `deliver-package`, `small-change` and `land-pr`
@@ -38,7 +40,8 @@ workflows with their args and outputs; [SOURCES.md](SOURCES.md) lists the resear
 **Wondering why?** [About engineering practices as a shared base](docs/explanation/about-the-role.md)
 explains the reasoning (trunk-based development, squash merge, who
 merges, provenance, docs inside the work) and the boundaries with
-neighbouring roles.
+neighbouring roles. [About workflow run modes](docs/explanation/about-workflow-run-modes.md)
+explains the cheap ways to run any role workflow.
 
 For the full documentation method, install the technical-writer role.
 
