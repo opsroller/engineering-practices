@@ -121,13 +121,18 @@ const said = (o) => `${o.what}${o.link ? ` (${o.link})` : ''}${o.owner ? `, owne
 
 // Notifications about CI and reviews are not reliable, and shell sleeps may
 // be blocked, so a CI wait is a scheduled check-in, then a re-run.
-const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
+const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "red-on-base: <check>" (red or hung on the default branch too, per the rule below), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
 
 // One failing leg of a matrix (one browser, one OS) with a cause outside
 // the diff is worth one re-run, never a silent retry: each pass on re-run
 // is a flake and goes in the project's flake log.
 // Same text in land-pr.js and deliver-package.js: change all three.
 const FLAKE = `A single failing job: when exactly one job or matrix leg failed (one browser, one OS, one shard), the same tests pass on the other legs, and its log points outside this PR's diff (a timeout, runner, network, download or infrastructure error, or a test that does not touch the changed code), re-run only that job, once per head SHA (\`gh run rerun <run-id> --job <job-id>\`, or the hosting service's "re-run failed jobs"). Never re-run the whole workflow, never re-run twice, and never re-run a failure in code this PR touches. If the re-run passes, it is a flake: count CI as green, and record it in the project's flake log (the file or issue the profile names; if it names none, one open issue titled "CI flake log", created if missing) as one entry: date, check and job, head SHA, link to the failed run, one-line failure. Add the same line under a "Flaky checks" heading in the PR description. If the log already has two entries for that check in the last 30 days, say so, so its owner quarantines or fixes it. If the re-run fails again, the failure is real: treat it as red. Report each flake as "<check/job> | <head SHA> | <failed run link> | <one-line failure>".`
+
+// A check that is red or hung on the default branch too is not this PR's:
+// port a fix if one exists, comment once, and never loop waiting on it.
+// Same text in land-pr.js and deliver-package.js: change all three.
+const RED_BASE = `A check red on the base too: before fixing a red check, and when a check is hung (queued or running past its job timeout, or an hour if it sets none), read the same check on the default branch's latest commit, from the default branch's own run (never a re-run started for this PR). If it fails there with the same failure, or is hung there too, it is not this PR's: do not fix it in code this PR does not touch, do not widen the PR, and do not count it against the PR. If a fix for it exists (an open PR whose change you have read and that clears this check, or the revert of the commit that broke it), port the same change into this PR in its own commit ("<type>: port <fix> from <PR>"), run the local check, push and poll again: it no-ops once the default branch carries it. Otherwise, or if the ported fix does not clear it, post one PR comment for that check (skip it if this PR already has one from you for the same check): name the check, link its failing or hung run on the default branch, say why it is not this PR's, and name the fix you ported or say none exists yet. Find out whether the repository requires that check to merge (branch protection or rulesets) and set base_red_required. Never skip, disable or quarantine the check to get green. Report CI as "red-on-base: <check>" only when every other required check is green; a check red for this PR's own reasons still makes CI "red". Report each such check as "<check> | <default-branch run link> | <ported fix, or no fix yet> | <required or not required>".`
 
 const SCOPE = {
   type: 'object',
@@ -169,6 +174,8 @@ const HANDOFF = {
     ci: { type: 'string' },
     ready: { type: 'boolean' },
     reviewer_asked: { type: 'string' },
+    red_on_base: { type: 'array', items: { type: 'string' } },
+    base_red_required: { type: 'boolean' },
   },
   required: ['ci', 'ready'],
 }
@@ -177,6 +184,8 @@ const MERGE = {
   properties: {
     merged: { type: 'boolean' },
     squash_sha: { type: 'string' },
+    red_on_base: { type: 'array', items: { type: 'string' } },
+    base_red_required: { type: 'boolean' },
     ci: { type: 'string' },
     reason: { type: 'string' },
   },
@@ -192,16 +201,17 @@ if (args.pr && args.merge) {
 2. Right before merging, bring the latest default branch into the PR branch so it is tested against what it will land on: fetch, then rebase onto the default branch (push with --force-with-lease, which refuses to overwrite commits you have not seen) on a branch only you push to, or merge the default branch in if the profile says so or others push to it. Skip the push if the branch already contains the default branch's tip.
    If the update conflicts, or needs a lockfile or generated file regenerated, the result is new code the reviewer never saw: resolve it with the smallest edit that keeps both sides (regenerate with the project's tooling, never by hand), run the local check, push, poll CI as in step 3, ask the reviewer to look again with the new head SHA and the files you resolved, and return merged: false with the reason "updated with conflict resolution; needs the reviewer's pass on <new head SHA>". Do not merge in this run.
    One exception: if you merged (not rebased) and every conflict was a keep-both resolution (both sides' lines kept unchanged and in order, nothing else edited, no file regenerated, so \`git show --remerge-diff <merge>\` shows only that), the same rule as land-pr, the pass carries: post one PR comment addressed to the reviewer, "Pass carried from <passed SHA> to <new head>: merge of the default branch resolved keep-both", with the remerge-diff, and continue.
-3. Re-run the project's local check for the touched files. If you pushed, CI runs again: ${CI_POLL} ${FLAKE}
-4. Merge only if CI is "green" or "none", the branch is current, and the update in step 2 was conflict-free or carried the pass under the keep-both exception. If the default branch moved again while you waited, repeat steps 2 and 3 once more (the conflict rule still applies); if it keeps moving, stop and return the reason.
+3. Re-run the project's local check for the touched files. If you pushed, CI runs again: ${CI_POLL} ${FLAKE} ${RED_BASE}
+4. Merge only if CI is "green" or "none", or "red-on-base" on checks the repository does not require to merge (then add a "Red on the default branch" section listing them to the PR description before merging; a required one means return merged: false with the reason "red on base: <check>", without polling for it), the branch is current, and the update in step 2 was conflict-free or carried the pass under the keep-both exception. If the default branch moved again while you waited, repeat steps 2 and 3 once more (the conflict rule still applies); if it keeps moving, stop and return the reason.
 5. Squash-merge with the PR title as the subject (a valid Conventional Commit) and a body trimmed to the why plus footers (Refs:, BREAKING CHANGE:, co-author trailers). Use squash, never a merge commit or rebase-merge. Delete the branch.
-Return whether it merged, the squash commit SHA, the final CI state, and the reason if it did not merge.`,
+Return whether it merged, the squash commit SHA, the final CI state, red_on_base, and the reason if it did not merge.`,
     { schema: MERGE, phase: 'Merge', label: 'merge' },
   )
   if (!m) return `blocked: merge step for ${pr} failed (agent returned nothing); check the PR state before retrying`
   if (!m.merged && /^pending/.test(m.ci || '')) return `waiting: CI on ${pr} is still running (${m.ci}); ${WAIT}, then run merge mode again`
+  if (!m.merged && /^red-on-base/.test(m.ci || '') && /^red on base/i.test(m.reason || '')) return { pr, merged: false, ci: m.ci, red_on_base: m.red_on_base || [m.ci], next: `a check the repository requires is red or hung on the default branch too (commented on the PR once); do not poll for it: run merge mode again when the default branch is green again or the fix named in red_on_base merges` }
   if (!m.merged) return `not merged: ${pr}: ${m.reason || 'no reason given'} (CI: ${m.ci || 'unknown'})`
-  return { pr, merged: true, squash_sha: m.squash_sha, ci: m.ci, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
+  return { pr, merged: true, squash_sha: m.squash_sha, ci: m.ci, ...((m.red_on_base || []).length ? { red_on_base: m.red_on_base } : {}), next: 'tell whoever asked for the change, and any dependant, with the PR link' }
 }
 
 const change = String(args.change)
@@ -263,10 +273,10 @@ phase('Hand off')
 const h = await agent(
   `Hand off ${onto ? `PR ${onto}, with this change on its head,` : `the draft PR ${c.pr_url || 'on ' + s.branch}`} for review.${onto ? ' Any pass the reviewer gave an earlier head no longer counts: ask again with the new head SHA and one line on what this change added.' : ''}
 1. ${CI_POLL}
-2. If CI is "red" because of this change, fix it on the branch (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts. If it is red on ${s.default_branch} too, say so and do not widen the PR. ${FLAKE}
-3. When CI is "green" or "none", re-read the title and description against the final diff, mark the PR ready for review, and ${REVIEWER}. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
+2. If CI is "red" because of this change, fix it on the branch (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts. ${FLAKE} ${RED_BASE}
+3. When CI is "green", "none" or "red-on-base", re-read the title and description against the final diff, mark the PR ready for review, and ${REVIEWER}. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
 Follow engineering-practices git-workflow and peer-coordination. Do not merge here.
-Return the PR URL, the CI state, whether the PR is ready, and who was asked to review.`,
+Return the PR URL, the CI state, red_on_base, whether the PR is ready, and who was asked to review.`,
   { schema: HANDOFF, phase: 'Hand off', label: 'handoff' },
 )
 if (!h) return `blocked: hand-off for ${c.pr_url || s.branch} failed (agent returned nothing); the PR is still draft`
@@ -274,6 +284,7 @@ return {
   pr: h.pr_url || c.pr_url,
   ci: h.ci,
   ready: h.ready,
+  ...((h.red_on_base || []).length ? { red_on_base: h.red_on_base } : {}),
   reviewer: h.reviewer_asked || 'not asked',
   notes: (r.other || []).length ? r.other : [],
   next: h.ready

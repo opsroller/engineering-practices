@@ -47,6 +47,12 @@ merge without letting it drift behind the default branch.
    your change must also cover) are already committed on the branch.
    If CI shows one failing browser or OS leg, the workflow re-runs that
    job once; a pass is logged as a flake and listed in `flakes`.
+   If a check is red or hung on the default branch too, the workflow
+   ports an existing fix or comments once on the PR and carries on; the
+   check is listed in `red_on_base`. If it returns `merged: false` with
+   `red_on_base`, that check is required to merge: run it again once the
+   default branch is green or the named fix has merged, without polling
+   in between.
 
 3. If it returns `waiting: CI ... is still running`, schedule a check-in
    for 5 minutes later (a send-later, wakeup or scheduled-task tool) and

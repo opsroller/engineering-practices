@@ -18,7 +18,7 @@ squash merge.
 |---|---|
 | Adopt | Reads the default branch from the remote; finds the PR for the branch, or opens a draft one; confirms you can push to the head branch; names the local check |
 | Follow-up | Only with `followup`: checks out the head branch at its remote tip, makes the smallest edit, runs the local check, commits (Conventional Commit), pushes, adds a line to the PR description. Stops if the change needs new behaviour, a contract change or a new doc page |
-| Sync | Merges the latest default branch in, resolves conflicts, applies [cross-PR items](#cross-pr-items), re-runs the local check, pushes, polls CI and [re-runs one failing job once](#one-failing-job); repeats if the default branch moved meanwhile (3 rounds at most) |
+| Sync | Merges the latest default branch in, resolves conflicts, applies [cross-PR items](#cross-pr-items), re-runs the local check, pushes, polls CI, [re-runs one failing job once](#one-failing-job) and handles [checks red on the default branch too](#red-on-the-default-branch); repeats if the default branch moved meanwhile (3 rounds at most) |
 | Review | Reads the reviewer verdict; [carries a pass](#reviewer-pass) across keep-both merges with the merge diff posted to the reviewer; asks for review of the delta (and marks the PR ready) if a new pass is needed and nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
 | Close | Only with `row` or `notify`: reads the status row on the default branch and, if it does not read the project's merged-state value, sets it (a direct commit only where the project allows it, otherwise small-change); messages each `notify` target once with the PR link and squash SHA (agent sessions by cross-session message, people by mention; never the project owner) |
@@ -66,6 +66,7 @@ stops.
 
 The agent reads the checks on the PR's latest head SHA itself, never
 waiting for a notification, and reports `green`, `red: <check> <cause>`,
+`red-on-base: <check>` ([red on the default branch](#red-on-the-default-branch)),
 `pending: <checks>` or `none`. It never sleeps in the shell. While checks
 run, a session that can schedule its own check-in (a send-later, wakeup
 or scheduled-task tool) reports `pending` at once; the run returns
@@ -94,6 +95,37 @@ one open issue titled "CI flake log" (created if missing). When the log
 already holds two entries for that check in the last 30 days, the entry
 says so, so the check's owner quarantines or fixes it.
 
+## Red on the default branch
+
+Before fixing a red check, and when a check is hung (queued or running
+past its job timeout, or an hour if it sets none), Sync reads the same
+check on the default branch's latest commit, from the default branch's
+own run. A check that fails there with the same failure, or hangs there
+too, is not the PR's: Sync does not fix it in code the PR does not
+touch, does not widen the PR and does not count it against the PR.
+
+1. If a fix exists (an open PR whose change clears the check, or the
+   revert of the breaking commit), Sync ports the same change into the
+   PR in its own commit and polls again; the port no-ops once the
+   default branch carries it.
+2. Otherwise, or if the port does not clear it, Sync posts one PR
+   comment for that check (never a second): the check, a link to its
+   run on the default branch, why it is not the PR's, and the fix
+   ported or "no fix yet".
+3. CI reads `red-on-base: <check>` only when every other required check
+   is green; a check red for the PR's own reasons still makes it `red`.
+   The check is never skipped, disabled or quarantined.
+
+The run then goes on to Review without polling for the check:
+
+| The check is | Then |
+|---|---|
+| Not required to merge (no branch protection or ruleset names it) | Merge goes ahead; the PR body gets a "Red on <default branch>" section listing it, and the result has `red_on_base` |
+| Required to merge | No merge: the run returns `{ pr, merged: false, ci, review, red_on_base, next }` once the review state is read; run land-pr again when the default branch is green again or the named fix merges |
+
+Each `red_on_base` entry reads `<check> | <default-branch run link> |
+<ported fix, or no fix yet> | <required or not required>`.
+
 ## Reviewer pass
 
 | Commits after the passed head | Then |
@@ -121,5 +153,6 @@ says so, so the check's owner quarantines or fixes it.
 | `blocked: should-fix round ... failed`, `blocked: local check fails ... after the should-fix edits` | The should-fix step returned nothing, or broke the local check |
 | `not merged: ... moved after verification` | Head or base changed between verification and merge; run again, or use the project's merge queue |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged (no `row` or `notify`) |
-| `review_carried_from`, `flakes` (on any object result) | The passed SHA a pass was carried from; flake entries recorded this run |
+| Object `{ pr, merged: false, ci, review, red_on_base, next }` | Reviewer passed, but a check the repository requires is [red on the default branch](#red-on-the-default-branch) too; commented once, not polled; run again when it clears |
+| `review_carried_from`, `flakes`, `red_on_base` (on any object result) | The passed SHA a pass was carried from; flake entries recorded this run; checks red or hung on the default branch too |
 | Object `{ pr, merged, squash_sha, ci, row, row_pr, notified, not_notified, next }` | Squash-merged and closed out: `row` is `already`, `fixed` (with `row_pr`), `not-fixed` or `none`; `next` is `done` or lists what is still owed |

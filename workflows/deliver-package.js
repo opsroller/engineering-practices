@@ -159,6 +159,11 @@ const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
 // Same text in land-pr.js and small-change.js: change all three.
 const FLAKE = `A single failing job: when exactly one job or matrix leg failed (one browser, one OS, one shard), the same tests pass on the other legs, and its log points outside this PR's diff (a timeout, runner, network, download or infrastructure error, or a test that does not touch the changed code), re-run only that job, once per head SHA (\`gh run rerun <run-id> --job <job-id>\`, or the hosting service's "re-run failed jobs"). Never re-run the whole workflow, never re-run twice, and never re-run a failure in code this PR touches. If the re-run passes, it is a flake: count CI as green, and record it in the project's flake log (the file or issue the profile names; if it names none, one open issue titled "CI flake log", created if missing) as one entry: date, check and job, head SHA, link to the failed run, one-line failure. Add the same line under a "Flaky checks" heading in the PR description. If the log already has two entries for that check in the last 30 days, say so, so its owner quarantines or fixes it. If the re-run fails again, the failure is real: treat it as red. Report each flake as "<check/job> | <head SHA> | <failed run link> | <one-line failure>".`
 
+// A check that is red or hung on the default branch too is not this PR's:
+// port a fix if one exists, comment once, and never loop waiting on it.
+// Same text in land-pr.js and small-change.js: change all three.
+const RED_BASE = `A check red on the base too: before fixing a red check, and when a check is hung (queued or running past its job timeout, or an hour if it sets none), read the same check on the default branch's latest commit, from the default branch's own run (never a re-run started for this PR). If it fails there with the same failure, or is hung there too, it is not this PR's: do not fix it in code this PR does not touch, do not widen the PR, and do not count it against the PR. If a fix for it exists (an open PR whose change you have read and that clears this check, or the revert of the commit that broke it), port the same change into this PR in its own commit ("<type>: port <fix> from <PR>"), run the local check, push and poll again: it no-ops once the default branch carries it. Otherwise, or if the ported fix does not clear it, post one PR comment for that check (skip it if this PR already has one from you for the same check): name the check, link its failing or hung run on the default branch, say why it is not this PR's, and name the fix you ported or say none exists yet. Find out whether the repository requires that check to merge (branch protection or rulesets) and set base_red_required. Never skip, disable or quarantine the check to get green. Report CI as "red-on-base: <check>" only when every other required check is green; a check red for this PR's own reasons still makes CI "red". Report each such check as "<check> | <default-branch run link> | <ported fix, or no fix yet> | <required or not required>".`
+
 // When the default branch gains a new member of a set this PR edits member
 // by member (a preset, a workflow, a target), the merge is clean but the PR
 // is incomplete; the sync step looks for that, not only for conflicts.
@@ -234,6 +239,8 @@ const SHIP = {
     status_set: { type: 'string' },
     cross_pr: { type: 'array', items: { type: 'string' } },
     flakes: { type: 'array', items: { type: 'string' } },
+    red_on_base: { type: 'array', items: { type: 'string' } },
+    base_red_required: { type: 'boolean' },
   },
   required: ['pr_url', 'ci'],
 }
@@ -332,10 +339,10 @@ phase('Ship')
 const s = await agent(
   `For ${wp} on ${p.branch}:
 1. Bring it up to date: fetch and merge the latest remote default branch into ${p.branch} (a merge, not a rebase, unless the profile requires a rebase and you alone push to the branch). Resolve conflicts the engineering-practices land-pr way: shared lists (docs indexes, changelogs, registries, manifests) keep both sides' entries in the file's order with no duplicates; lockfiles and generated files take the default branch's version and are regenerated; same logic changed on both sides is combined only if both intents provably hold, otherwise abort the merge and return the files as ci "red: conflicts: <files>". ${CROSS_PR(p.branch, 'the default branch')} Unresolved items go in ci as "red: cross-PR: <items>". Re-run the build and tests and push.
-2. Confirm the build, tests and CI pass on the pushed head. ${FLAKE}
+2. Confirm the build, tests and CI pass on the pushed head. ${FLAKE} ${RED_BASE} A "red-on-base" CI state does not hold the PR back from review.
 3. ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
 Do not merge here: the author squash-merges after the reviewer passes it and CI is green.
-${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), the cross-PR items you applied, any flakes, and the dependant packages to notify with the PR link once merged.`,
+${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), the cross-PR items you applied, any flakes, any red_on_base checks, and the dependant packages to notify with the PR link once merged.`,
   { schema: SHIP, phase: 'Ship', label: 'ship' },
 )
 if (!s) return `blocked: ship step for ${wp} failed (agent returned nothing); PR ${b.pr_url || 'on ' + p.branch} is reviewed but not marked ready`
@@ -352,6 +359,7 @@ return {
   dependants: s.dependants || [],
   ...((s.cross_pr || []).length ? { cross_pr: s.cross_pr } : {}),
   ...((s.flakes || []).length ? { flakes: s.flakes } : {}),
+  ...((s.red_on_base || []).length ? { red_on_base: s.red_on_base } : {}),
   land: { pr: s.pr_url, row: `${plan}: ${wp}`, notify: [...(s.dependants || []).map((x) => `${x} (dependant)`), 'the coordinator or whoever assigned this package'] },
   next: `after the code reviewer passes, run /engineering-practices:land-pr with the land object as args: it keeps the branch current, polls CI, squash-merges, confirms the ${wp} row reads merged on the default branch and tells each dependant and the assigner`,
 }

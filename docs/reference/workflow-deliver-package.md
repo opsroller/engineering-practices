@@ -18,7 +18,7 @@ Reference, for anyone running a work package through the workflow.
 | Build | Implements in owned paths with Conventional Commits, license headers, provenance log; opens a draft PR. With `prior`: skipped when `prior.pr` is set and Plan finds nothing missing; otherwise does only the missing steps and opens the PR |
 | Document | Writes or updates the planned pages, one kind each, in the same PR. With `prior`: skipped when `prior.docs` lists pages and Plan finds none missing |
 | Check | Independent review of change and docs; up to 3 review rounds with fixes between |
-| Ship | Merges the latest default branch in (land-pr's conflict rules), applies cross-PR items (extends the change to new members of any set it edits member by member, adapts to renames), confirms CI with at most one re-run of a single failing job whose cause is outside the diff (a pass is logged as a flake), sets the plan row to `ship_status` (or leaves it), aligns PR title and body (with a "Known risks" section for caveats), marks ready, asks the code-reviewer role ([reaching the reviewer](#reaching-the-reviewer)) |
+| Ship | Merges the latest default branch in (land-pr's conflict rules), applies cross-PR items (extends the change to new members of any set it edits member by member, adapts to renames), confirms CI with at most one re-run of a single failing job whose cause is outside the diff (a pass is logged as a flake), treats a check red or hung on the default branch too as [land-pr does](workflow-land-pr.md#red-on-the-default-branch) (a ported fix or one PR comment; it does not hold the PR back from review), sets the plan row to `ship_status` (or leaves it), aligns PR title and body (with a "Known risks" section for caveats), marks ready, asks the code-reviewer role ([reaching the reviewer](#reaching-the-reviewer)) |
 
 ## Reaching the reviewer
 
@@ -98,7 +98,7 @@ For `run.only` and `run.results`: `plan`, `build`, `docs`, `review:1` to `review
 | `blocked: build ... failed` | Build agent returned nothing |
 | `blocked: ... still has open items after review` | Blockers open after 3 rounds, or no review completed; lists them |
 | `blocked: ship step ... failed` | Ship agent returned nothing |
-| Object `{ wp, pr, ci, docs, undocumented, prior, status, caveats, overlaps, dependants, land, next }` | PR ready for the code reviewer; `prior` (the handoff's `from`) only when `prior` was given; `status` is the value set on the plan row or `"unchanged"`; `caveats` and `overlaps` (same-files work) are informational; `land` is the args for land-pr |
+| Object `{ wp, pr, ci, docs, undocumented, prior, status, caveats, overlaps, dependants, land, next }` | PR ready for the code reviewer; `prior` (the handoff's `from`) only when `prior` was given; `status` is the value set on the plan row or `"unchanged"`; `caveats` and `overlaps` (same-files work) are informational; `land` is the args for land-pr; `red_on_base` lists checks red on the default branch too, when any |
 
 The workflow never merges. After the reviewer passes, the author runs
 [land-pr](workflow-land-pr.md) with `land` as its args (`pr`, `row` and
