@@ -92,7 +92,8 @@ for (let round = 1; round <= MAX_SYNC; round++) {
     `Bring ${pr} (head ${a.head_branch}) up to date with ${a.default_branch} and verify it. Follow engineering-practices git-workflow.
 1. Fetch, then merge the latest remote ${a.default_branch} into ${a.head_branch}. Use a merge, not a rebase: it never rewrites published commits, works on a branch others push to, and needs no force-push. ${a.shared_branch ? 'Others push to this branch: pull their commits first.' : 'Rebase only if the profile requires it and you alone push to the branch, then push with --force-with-lease.'} If the branch already contains ${a.default_branch}'s tip, skip to step 4.
 2. Resolve conflicts:
-   - Shared lists (changelogs, docs indexes, catalogs and registries, manifests, enum or id tables, lists of files, routes or tests): keep every entry from both sides, in the file's own order (sorted, numbered or appended), with no duplicates; renumber if entries are numbered.
+   - Shared lists (changelogs, docs indexes, catalogs and registries, manifests, lists of files, routes or tests): keep every entry from both sides, in the file's own order (sorted, numbered or appended), with no duplicates; renumber positions only where nothing references the number.
+   - Enum values or id tables: keep both sides' entries if their ids differ. If both sides took the same id or value, stop: renumbering one would silently change an id that code, data or saves already use. List the file under unresolved.
    - Lockfiles and generated files: take ${a.default_branch}'s version, then regenerate with the project's tooling. Never hand-merge them.
    - Code or prose where both sides changed the same logic: keep both intents if you can show they combine; if picking either side loses behaviour, stop, abort the merge and list the files under unresolved.
 3. Commit the merge with the default message, or "chore: merge ${a.default_branch} into ${a.head_branch}" if the project requires Conventional Commit subjects on every commit.
@@ -116,7 +117,7 @@ phase('Review')
 const v = await agent(
   `Read the review state of ${pr} at head ${s.head_sha || '(current head)'}. Do not edit code.
 The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. A pass counts only if it covers the current head or the only commits after it are merges of ${a.default_branch} with no conflict edits in reviewed files. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review).
-Return state "passed", "changes" (list every unanswered or unfixed finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
+Return state "passed", "changes" (list every unanswered or unfixed finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
   { schema: VERDICT, phase: 'Review', label: 'review' },
 )
 if (!v) return `blocked: could not read the review state of ${pr} (agent returned nothing)`
@@ -143,7 +144,7 @@ Return whether it merged, the squash commit SHA, and the reason if not.`,
 if (!m) return `blocked: merge step for ${pr} failed (agent returned nothing); check the PR state before retrying`
 if (!m.merged) {
   return m.reason === 'moved'
-    ? `not merged: ${pr} or ${a.default_branch} moved after verification; run land-pr again`
+    ? `not merged: ${pr} or ${a.default_branch} moved after verification; run land-pr again, or use the project's merge queue if it has one`
     : `not merged: ${pr}: ${m.reason || 'no reason given'}`
 }
 return {

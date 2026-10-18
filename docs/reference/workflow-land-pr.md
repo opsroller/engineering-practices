@@ -24,7 +24,8 @@ squash merge.
 
 | Conflict in | Resolution |
 |---|---|
-| Shared lists: changelogs, docs indexes, catalogs, registries, manifests, id tables, file or test lists | Keep both sides' entries in the file's own order, no duplicates, renumber if numbered |
+| Shared lists: changelogs, docs indexes, catalogs, registries, manifests, file or test lists | Keep both sides' entries in the file's own order, no duplicates; renumber positions only where nothing references the number |
+| Enum values or id tables | Keep both sides' entries if their ids differ; if both took the same id or value, stop and list the file (renumbering would change an id already in use) |
 | Lockfiles and generated files | Take the default branch's version, regenerate with the project's tooling |
 | The same logic changed on both sides | Combine both intents if provably compatible; otherwise stop and list the files |
 
@@ -32,6 +33,8 @@ The workflow merges the default branch in rather than rebasing: a merge
 never rewrites pushed commits, works on a branch others push to, and
 needs no force-push. It rebases only when the profile requires it and
 one author pushes to the branch, then pushes with `--force-with-lease`.
+A rebase gives every commit a new SHA, so no earlier reviewer pass
+counts and each run asks the reviewer again.
 
 ## CI polling
 
@@ -59,5 +62,5 @@ later commits are conflict-free merges of the default branch.
 | `blocked: ... kept moving through 3 sync rounds` | The default branch moved every round |
 | `changes requested on ...` | Lists the open findings to fix before running again |
 | Object `{ pr, ci, review, next }` | Waiting on the reviewer; run again once the verdict is in |
-| `not merged: ... moved after verification` | Head or base changed between verification and merge; run again |
+| `not merged: ... moved after verification` | Head or base changed between verification and merge; run again, or use the project's merge queue |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged |
