@@ -38,7 +38,11 @@ squash commit.
    `package-lead` agent and follow the same steps.
 
 2. If it returns `blocked: ... cannot start`, fix the plan row (or ask
-   the project-manager role to) and run it again.
+   the project-manager role to) and run it again. If it returns
+   `blocked: ... already in flight elsewhere`, message the owner of the
+   listed PR, branch or session and agree who does it before running
+   again. Caveats never stop the run; they land in the PR's "Known
+   risks" section and in the result's `caveats`.
 
 3. If it returns `blocked: ... still has open items after review`, fix
    the listed items on the branch, or hand them back to the package's

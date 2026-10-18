@@ -28,6 +28,11 @@ const version = (canonical.match(/run-modes (v\d+)/) || [])[1]
 
 // A prompt that asks for a review of work the run produced must be marked
 // independent, so inline mode routes it away from the author.
+// An independent step only reads and reports. One that also edits, commits
+// or pushes (a docs check that applies its own fixes) has a part in the
+// work it judges, so it is not independent.
+const WRITES = /\b(commit|push|apply (the |your |each )?fix(es)?|fix (them|it|each|what you find))\b/i
+const READ_ONLY = /\b(do not|don't|never) (edit|change|modify|commit|push|write)|\bread-only\b|\bwithout (editing|changing)\b/i
 const REVIEW_LIKE = /\bindependent(ly)?\s+(review|check|read|reviewer)|\bact as an? (independent )?reviewer|\byou did not write\b|\bfresh (read|reviewer)\b|\bmust not assume (its|the) intent/i
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 const fn = new AsyncFunction('args', 'agent', 'phase', 'log', 'pipeline', 'parallel', 'budget', src)
@@ -90,6 +95,8 @@ async function checkAll() {
   if (Object.values(env.out.reviewers || {}).some((v) => v !== 'subagent')) fail(`agents mode must record every independent step as "subagent": ${JSON.stringify(env.out.reviewers)}`)
   const unmarked = env.calls.filter((c) => !marked.has(c.label) && REVIEW_LIKE.test(c.prompt)).map((c) => c.label)
   if (unmarked.length) fail(`review steps not marked independent: ${unmarked.join(', ')}; pass { independent: true } in their agent() options`)
+  const writers = env.calls.filter((c) => marked.has(c.label) && WRITES.test(c.prompt) && !READ_ONLY.test(c.prompt)).map((c) => c.label)
+  if (writers.length) fail(`independent steps that also edit, commit or push: ${writers.join(', ')}; an independent step only reads and reports, so split the fixing into its own step after it`)
   if ((env.out.self_reviewed || []).length) fail('agents mode must report no self-reviewed steps')
 
   let results = {}

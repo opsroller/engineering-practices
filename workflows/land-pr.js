@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'land-pr',
-  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }',
+  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>"',
   phases: [
     { title: 'Adopt', detail: 'find or open the PR for the branch; read the default branch; confirm you can push to the head branch' },
+    { title: 'Follow-up', detail: 'only with followup: make that change on the head branch, run the local check, commit, push, note it in the PR body' },
     { title: 'Sync', detail: 'merge the latest default branch in, resolve conflicts, re-run local checks, push, poll CI; repeat while the default branch moves (max 3 rounds)' },
     { title: 'Review', detail: 'read the reviewer verdict on the current head; ask for review if nobody has been asked' },
     { title: 'Merge', detail: 'refresh the PR body, confirm head and base are still the verified ones, squash-merge' },
@@ -102,7 +103,7 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }'
+const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }; add followup: "<change to make on the PR first, optional>"'
 if (!args || (!args.pr && !args.branch)) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
@@ -125,6 +126,16 @@ const ADOPT = {
     problem: { type: 'string' },
   },
   required: ['head_branch', 'default_branch', 'can_push', 'local_check'],
+}
+const FOLLOWUP = {
+  type: 'object',
+  properties: {
+    done: { type: 'boolean' },
+    head_sha: { type: 'string' },
+    subject: { type: 'string' },
+    reason: { type: 'string' },
+  },
+  required: ['done'],
 }
 const SYNC = {
   type: 'object',
@@ -177,6 +188,25 @@ if (!a) return `blocked: could not adopt ${target} (agent returned nothing). ${U
 if (a.problem || !a.can_push) return `blocked: ${target}: ${a.problem || 'cannot push to the head branch'}`
 const pr = a.pr_url || a.pr_number || target
 
+// A follow-up (a reviewer's ask, a fix found while landing) goes on the
+// PR's own head before syncing, so one review and one CI run cover it.
+const followup = args.followup ? String(args.followup).trim() : ''
+if (followup) {
+  phase('Follow-up')
+  const f = await agent(
+    `Add this follow-up change to ${pr} before it lands: "${followup}". Follow the engineering-practices skills git-workflow and provenance.
+1. Fetch, then check out ${a.head_branch} at its remote tip${a.shared_branch ? ' (others push to it: pull their commits first)' : ''}. Do not cut a new branch or open a new PR.
+2. Make the smallest edit that does it; touch nothing else. Keep the license header rule on any new file. If it turns out to need new behaviour another role would notice, a contract change or a new doc page, do not make it: return done: false with the reason.
+3. Run the local check: ${a.local_check}. Fix what your edit broke.
+4. Commit as a Conventional Commit, push to ${a.head_branch}, and add one line on the follow-up to the PR description.
+Return whether it is done, the new head SHA, the commit subject, and the reason if not done.`,
+    { schema: FOLLOWUP, phase: 'Follow-up', label: 'followup' },
+  )
+  if (!f) return `blocked: follow-up on ${pr} failed (agent returned nothing); check ${a.head_branch} for a half-made change`
+  if (!f.done) return `blocked: follow-up "${followup}" not added to ${pr}: ${f.reason || 'no reason given'}. Use small-change { change, pr } or deliver-package for it.`
+  log(`follow-up on ${pr}: ${f.subject || followup} at ${f.head_sha || 'new head'}; the reviewer must pass the new head`)
+}
+
 let s = null
 for (let round = 1; round <= MAX_SYNC; round++) {
   phase('Sync')
@@ -209,7 +239,7 @@ phase('Review')
 const v = await agent(
   `Read the review state of ${pr} at head ${s.head_sha || '(current head)'}. Do not edit code.
 The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. A pass counts only if it covers the current head or the only commits after it are merges of ${a.default_branch} with no conflict edits in reviewed files. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review).
-Return state "passed", "changes" (list every unanswered or unfixed finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
+${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not count; the reviewer must pass a head that includes it. ` : ''}Return state "passed", "changes" (list every unanswered or unfixed finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
   { schema: VERDICT, phase: 'Review', label: 'review' },
 )
 if (!v) return `blocked: could not read the review state of ${pr} (agent returned nothing)`

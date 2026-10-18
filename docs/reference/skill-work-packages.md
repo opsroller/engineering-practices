@@ -16,7 +16,7 @@ Reference, for roles carrying out or planning work packages.
 | Owned paths | Where the package may write |
 | Depends on | Packages or contracts needed |
 | Done when | One testable sentence |
-| Status | `planned`, `in progress`, `in review`, `merged`, `blocked` |
+| Status | The plan's own values, from its status legend (for example `planned`, `in progress`, `in review`, `merged`, `blocked`); workflows read them, never assume them |
 
 ## Finish checklist
 

@@ -7,7 +7,7 @@ squash merge.
 |---|---|
 | File | `workflows/land-pr.js` |
 | Command | `/engineering-practices:land-pr` |
-| Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }` |
+| Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }`; either takes `followup: "<change to add to the PR before landing>"` (optional) |
 | Run modes | v2: optional `run` arg for inline, partial or resumed runs (no independent steps); see [workflow run modes](workflow-run-modes.md) |
 | Use when | The work is already on a branch or PR (yours, an assigned branch, or one handed over) and needs to be kept current and landed |
 | Run again | Safe to re-run at any point; each run starts from the PR's current state |
@@ -17,13 +17,14 @@ squash merge.
 | Phase | Does |
 |---|---|
 | Adopt | Reads the default branch from the remote; finds the PR for the branch, or opens a draft one; confirms you can push to the head branch; names the local check |
+| Follow-up | Only with `followup`: checks out the head branch at its remote tip, makes the smallest edit, runs the local check, commits (Conventional Commit), pushes, adds a line to the PR description. Stops if the change needs new behaviour, a contract change or a new doc page |
 | Sync | Merges the latest default branch in, resolves conflicts, re-runs the local check, pushes, polls CI; repeats if the default branch moved meanwhile (3 rounds at most) |
 | Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
 
 ## Step labels
 
-For `run.only` and `run.results`: `adopt`, `sync:1` to `sync:3`, `review`, `merge`.
+For `run.only` and `run.results`: `adopt`, `followup` (with `followup` only), `sync:1` to `sync:3`, `review`, `merge`.
 Pass `results` only to resume the same run; a new land-pr run starts without them, because it re-reads the PR's current state.
 
 ## Conflict rules
@@ -53,7 +54,9 @@ most.
 ## Reviewer pass
 
 A pass counts for the current head, or for an earlier head when the only
-later commits are conflict-free merges of the default branch.
+later commits are conflict-free merges of the default branch. A follow-up
+commit is new code, so after one the reviewer must pass a head that
+includes it.
 
 ## Outputs
 
@@ -61,6 +64,7 @@ later commits are conflict-free merges of the default branch.
 |---|---|
 | Usage string | Neither `pr` nor `branch` given |
 | `blocked: <target>: <problem>` | PR closed or merged, or you cannot push to its head branch |
+| `blocked: follow-up ... not added ...` | The follow-up is not small enough to ride on this PR; use small-change `{ change, pr }` or deliver-package |
 | `blocked: ... conflicts that lose behaviour either way` | Lists the files to resolve with the other change's author |
 | `blocked: local check fails ...` | The check fails after syncing |
 | `waiting: CI ... is still running` | CI did not finish within the poll; run again later |

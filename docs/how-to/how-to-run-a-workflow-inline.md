@@ -40,6 +40,31 @@ your own session, with no subagents.
    lists any step, say in the PR and your report that it was
    self-reviewed.
 
+## Keep the resume light with a state file
+
+Steps 2 to 5 re-send every earlier answer each time. To send only the
+new ones, drive the run with the engineering-practices state file
+runner, which keeps args and answers in a JSON file:
+
+1. Start it with the workflow file and its args:
+
+   ```
+   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --args '{"screens": ["title", "pause"]}'
+   ```
+
+2. Do each printed brief. Write each answer to its own file (JSON when
+   the brief has a schema; the full schema is in the state file's
+   `next`).
+
+3. Pass the answers, and the reviewer of each independent brief:
+
+   ```
+   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer plan=plan.json --answer review=review.json --reviewer 'review=code-reviewer thread'
+   ```
+
+4. Repeat steps 2 and 3 until it prints `status: done` and the result.
+   To redo a step, add `--redo <key>`.
+
 ## Run only part of a workflow
 
 Add `only` with phase titles or step labels. Give the answers of the

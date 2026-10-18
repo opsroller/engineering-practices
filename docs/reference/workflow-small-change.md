@@ -7,6 +7,7 @@ Reference, for anyone landing a chore-sized change through the workflow.
 | File | `workflows/small-change.js` |
 | Command | `/engineering-practices:small-change` |
 | Open args | `{ change: "<what to change and why>" (required), type: "<Conventional Commit type>" (optional), scope: "<scope>" (optional) }` |
+| Add-to-PR args | `{ change: "<what to change and why>" (required), pr: "<number or URL>" (required) }`: the change goes on that PR's head branch instead of a new branch and PR |
 | Merge args | `{ pr: "<number or URL>" (required), merge: true (required) }` |
 | Run modes | v2: optional `run` arg for inline, partial or resumed runs, with review steps marked independent; see [workflow run modes](workflow-run-modes.md) |
 | Fits | One concern in a few lines: a config line, a dependency bump that needs no code changes, a docs index or link fix, a version string |
@@ -16,10 +17,10 @@ Reference, for anyone landing a chore-sized change through the workflow.
 
 | Phase | Mode | Does |
 |---|---|---|
-| Scope | open | Reads the project's rules; decides whether the change is small; picks the default branch (from the remote), branch name, PR title and local check |
-| Change | open | Branches off the latest remote default branch, makes the minimal edit, runs the local check, commits, pushes, opens a draft PR |
-| Check | open | Independent read of the diff; one fix round at most |
-| Hand off | open | Polls CI itself until it settles, fixes red CI caused by the change (two attempts at most), marks the PR ready and asks the reviewer |
+| Scope | open, add | Reads the project's rules; checks for overlapping work (as in [deliver-package](workflow-deliver-package.md#overlapping-work)) and stops on a duplicate; decides whether the change is small; picks the default branch (from the remote), branch name, PR title and local check. Add mode: confirms the PR is open and pushable, takes its head branch, and the title is the commit subject |
+| Change | open, add | Open: branches off the latest remote default branch, makes the minimal edit, runs the local check, commits, pushes, opens a draft PR. Add: checks out the PR head at its remote tip, commits and pushes there, adds a line to the PR description; no new branch or PR |
+| Check | open, add | Independent read of the diff (add mode: the added commits, then the whole PR for what they break); one fix round at most |
+| Hand off | open, add | Polls CI itself until it settles, fixes red CI caused by the change (two attempts at most), marks the PR ready and asks the reviewer; in add mode asks again with the new head SHA, since an earlier pass no longer counts |
 | Merge | merge | Confirms the PR is out of draft, comments are answered and the reviewer passed the current head (per the profile's review convention); brings the latest default branch in; re-runs the local check and polls CI; squash-merges only after a conflict-free update; deletes the branch |
 
 ## Step labels
@@ -59,7 +60,8 @@ so.
 | Result | Meaning |
 |---|---|
 | Usage string | Neither `change` nor `pr` with `merge: true` given |
-| `not small: ...` | Too big for this workflow; use deliver-package |
+| `not small: ...` | Too big for this workflow, or (add mode) the PR is closed or not pushable; use deliver-package |
+| `blocked: this change is already in flight elsewhere ...` | Another PR, branch or session has the same goal; lists them |
 | `blocked: scoping failed ...` | Scope agent returned nothing |
 | `blocked: change step failed ...` | Change agent returned nothing; the branch may hold partial work |
 | `blocked: local check failed ...` | The local check failed; output and PR (if opened) listed |

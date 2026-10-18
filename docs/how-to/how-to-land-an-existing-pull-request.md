@@ -23,7 +23,17 @@ merge without letting it drift behind the default branch.
    /engineering-practices:land-pr {"branch": "claude/assigned-branch", "title": "fix(parser): accept empty input"}
    ```
 
-2. If it returns `blocked: ... conflicts that lose behaviour either way`,
+   To add one small change first (a reviewer's ask, a fix you spotted),
+   pass it as `followup`; it is committed on the PR's head branch before
+   syncing, and the reviewer is asked to pass the new head:
+
+   ```
+   /engineering-practices:land-pr {"pr": "42", "followup": "rename parseOpts to parseOptions as the reviewer asked"}
+   ```
+
+2. If it returns `blocked: follow-up ... not added`, the change is too
+   big to ride on this PR: use small-change with `pr`, or a work package.
+   If it returns `blocked: ... conflicts that lose behaviour either way`,
    settle each listed file with the author of the other change
    (`peer-coordination`), commit, and run it again.
 
