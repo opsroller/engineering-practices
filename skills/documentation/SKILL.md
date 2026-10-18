@@ -49,7 +49,8 @@ advanced" is not the line.
 | Work | Docs it owes |
 |---|---|
 | New feature or system | Reference for its interface; explanation if a design choice was made; how-to if users must do something new |
-| Changed interface, option or behaviour | Reference updated; any how-to that mentions it |
+| Changed interface, option or behaviour | Reference updated; any how-to that mentions it; a changelog entry |
+| Removal or deprecation | Reference marks it removed or deprecated; a migration how-to; a changelog entry |
 | Bug fix | Reference if behaviour changed; a troubleshooting how-to if users hit it |
 | Decision between alternatives | An explanation page (decision-record style) |
 | New repeatable task | A how-to, titled by the goal |
