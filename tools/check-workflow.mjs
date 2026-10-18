@@ -89,4 +89,4 @@ if (first) {
 const bad = await run({ from: 'No such phase' })
 if (titles.length && typeof bad.out !== 'string') fail('run.from with an unknown phase must return an error string')
 
-if (!process.exitCode) console.log(`ok ${file}: ${base.calls.length} agent(s) in agents mode; inline finished in ${steps} step(s)`)
+if (!process.exitCode) console.log(`ok ${file}: ${base.calls.length} agent(s) in agents mode; inline finished in ${steps} step(s); labels: ${labels.join(', ')}`)
