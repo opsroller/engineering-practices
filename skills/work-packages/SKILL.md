@@ -44,7 +44,9 @@ A row without a testable done-when is not ready; ask the coordinator
 ## Work
 
 - **Write only in your owned paths.** A change anywhere else is a
-  request to that path's owner. Shared append-only files named in the
+  request to that path's owner. The one exception is a minimal edit
+  your change cannot work without, made under the cross-role edit rules
+  in `peer-coordination`. Shared append-only files named in the
   profile (provenance log, credits, changelog, plan status) are open to
   all; append, never rewrite others' lines.
 - Put your tests in files for your package rather than editing others'.

@@ -53,7 +53,9 @@ Message and type details: [commit-reference.md](commit-reference.md).
   commit, so it is the permanent record.
 - **Description**: what changed and why; how it was tested; what was
   stubbed or left out; docs updated (by Diataxis kind); sources and
-  licenses of anything not original (`provenance`); `Refs: WP-<id>`.
+  licenses of anything not original (`provenance`); a "Cross-role
+  edits" section for any edit in another role's path
+  (`peer-coordination`); `Refs: WP-<id>`.
   Enough context that a reader without links can follow it.
 - Open as **draft** early. Mark ready when CI is green and you have
   reviewed your own diff top to bottom.
