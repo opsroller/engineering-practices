@@ -20,7 +20,8 @@ Reference, for roles writing the docs their change owes.
 | Work | Docs |
 |---|---|
 | New feature or system | Reference; explanation if a design choice; how-to if users do something new |
-| Changed interface or behaviour | Reference updated; affected how-tos |
+| Changed interface or behaviour | Reference updated; affected how-tos; changelog entry |
+| Removal or deprecation | Reference marks it; migration how-to; changelog entry |
 | Bug fix | Reference if behaviour changed; troubleshooting how-to if users hit it |
 | Decision between alternatives | Explanation |
 | New repeatable task | How-to |
