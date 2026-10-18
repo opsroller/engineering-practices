@@ -34,7 +34,7 @@ Running workflows:
 
 ## Workflows
 
-- [deliver-package](workflow-deliver-package.md): plan, build, document, check, ship one package.
+- [deliver-package](workflow-deliver-package.md): plan, build, document, check, ship one package, or ship one a role workflow already built (`prior`).
 - [small-change](workflow-small-change.md): land one chore-sized change, from branch to squash merge.
 - [land-pr](workflow-land-pr.md): keep an existing branch or PR current, poll CI, squash-merge.
 
@@ -46,7 +46,7 @@ Every workflow, here and in each role plugin, takes the optional `run` arg descr
 | Field | Value |
 |---|---|
 | `name` | `engineering-practices` |
-| `version` | `0.5.0` |
+| `version` | `0.6.0` |
 | `author.name` | `opsroller` |
 | `repository` | `https://github.com/opsroller/engineering-practices` |
 | `license` | `GPL-2.0-or-later` |
