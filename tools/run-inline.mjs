@@ -38,10 +38,14 @@ const review = (n) => {
 }
 const recordCmd = (n) => `node ${process.argv[1]} ${file} ${statePath} --reviewer '${n.key}=<reviewer name>'`
 // A handback is often the reviewer's whole reply: prose around a fenced JSON
-// block. Take the JSON out of it so nobody has to copy it out by hand.
-const parseAnswer = (text) => {
+// block. For a brief with a schema, take the JSON out of it so nobody has to
+// copy it out by hand; a text brief keeps its reply verbatim. With no waiting
+// brief to go by, parse the whole text as JSON or keep it as text.
+const parseAnswer = (text, n) => {
   const t = text.trim()
+  if (n && !n.schema) return t
   try { return JSON.parse(t) } catch {}
+  if (!n) return t
   const fences = [...t.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n```/g)].map((m) => m[1])
   for (const f of fences.reverse()) { try { return JSON.parse(f) } catch {} }
   const a = t.indexOf('{'), b = t.lastIndexOf('}')
@@ -85,6 +89,7 @@ const reviewText = (n) => [
 ].join('\n')
 let reviewKey = null
 let fresh = false
+let stdinUsed = false
 const given = new Set()
 for (let i = 2; i < argv.length; i++) {
   const flag = argv[i]
@@ -97,8 +102,12 @@ for (let i = 2; i < argv.length; i++) {
   else if (flag === '--args-file') state.args = JSON.parse(readFileSync(val, 'utf8'))
   else if (flag === '--answer') {
     const [k, f] = pair(val, flag)
-    const v = parseAnswer(readFileSync(f === '-' ? 0 : f, 'utf8'))
+    if (f === '-') {
+      if (stdinUsed) { console.error(`stdin is read once: only one --answer <key>=- per call (got a second for "${k}")`); process.exit(2) }
+      stdinUsed = true
+    }
     const n = waiting(k)
+    const v = parseAnswer(readFileSync(f === '-' ? 0 : f, 'utf8'), n)
     const gap = n && answerGap(v, n.schema)
     if (gap) { console.error(`answer for "${k}" does not fit its schema (${gap}); nothing recorded`); process.exit(2) }
     state.results[k] = v
@@ -148,7 +157,7 @@ const collected = []
 for (const n of fresh ? [] : (state.next || []).filter((b) => b.independent && !given.has(b.key) && !(b.key in state.results))) {
   const f = review(n).answer
   if (!existsSync(f)) continue
-  const v = parseAnswer(readFileSync(f, 'utf8'))
+  const v = parseAnswer(readFileSync(f, 'utf8'), n)
   const gap = answerGap(v, n.schema)
   if (gap) { console.error(`${f}: answer for "${n.key}" does not fit its schema (${gap}); nothing recorded. Have the reviewer rewrite it, or pass --answer '${n.key}=<file>'.`); process.exit(2) }
   state.results[n.key] = v

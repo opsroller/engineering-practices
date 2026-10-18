@@ -99,7 +99,7 @@ same as driving the Workflow tool by hand.
 | Flag | Effect |
 |---|---|
 | `--args '<JSON>'`, `--args-file <file>` | The workflow's own args (with any `run.only` or `run.from`); needed on the first call, stored for later ones |
-| `--answer <key>=<file>`, `--answer <key>=-` | Stores the file's content (or stdin, with `-`) under `key`: parsed as JSON when it is JSON, else the last fenced JSON block, else the outermost `{...}`, else trimmed text, so a reviewer's whole reply can be passed as handed back. For a brief waiting in the state file with an object schema, an answer that is not an object or lacks a required field exits 2 and records nothing |
+| `--answer <key>=<file>`, `--answer <key>=-` | Stores the file's content (or stdin, with `-`; once per call, a second `-` exits 2) under `key`. For a waiting brief with a schema: parsed as JSON, else the last fenced JSON block, else the outermost `{...}`, so a reviewer's whole reply can be passed as handed back; an answer that is not an object or lacks a required field exits 2 and records nothing. For a waiting text brief: the trimmed text, verbatim. For a key not waiting: JSON when the whole text is JSON, else trimmed text |
 | `--reviewer <key>=<name>` | Records who answered an independent step; required on the call that collects its answer file |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
 | `--fresh` | Drops every stored answer and keeps the args: use it to run again after a check-in, when the result said to (`waiting:`, `not merged:` or a `next` that says run again) |

@@ -88,6 +88,35 @@ const toReview = (name) => {
   check('a leftover answer file is moved aside when the brief is asked again', !existsSync(answer) && existsSync(`${answer}.stale`))
 }
 
+{
+  const state = join(dir, 'twostdin.json')
+  run(state, ['--args', '{}'])
+  const r = run(state, ['--answer', 'plan=-', '--answer', 'review=-'], '{"steps": []}')
+  check('a second --answer <key>=- on one call stops with exit 2', r.status === 2 && /stdin is read once/.test(r.stderr), r.stderr)
+  check('nothing is recorded when stdin is named twice', !('plan' in read(state).results))
+}
+
+{
+  // A text brief keeps its reply verbatim, even one that holds a fenced JSON block.
+  const tw = join(dir, 'text-fixture.js')
+  writeFileSync(tw, `export const meta = {
+  name: 'text-fixture',
+  description: 'test fixture',
+  phases: [{ title: 'Note' }],
+}
+phase('Note')
+const n = await agent('Write a short note.', { phase: 'Note', label: 'note' })
+return { note: n }
+`)
+  spawnSync('node', [join(here, 'apply-run-modes.mjs'), tw], { encoding: 'utf8' })
+  const state = join(dir, 'text.json')
+  spawnSync('node', [runner, tw, state, '--args', '{}'], { encoding: 'utf8' })
+  const reply = 'Here is an example config:\n\n```json\n{"a": 1}\n```'
+  const r = spawnSync('node', [runner, tw, state, '--answer', 'note=-'], { encoding: 'utf8', input: reply })
+  const s = read(state)
+  check('a text brief stores a reply with a fenced JSON block verbatim', r.status === 0 && s.results.note === reply, JSON.stringify(s.results.note) + r.stderr)
+}
+
 rmSync(dir, { recursive: true, force: true })
 if (failures.length) { console.error(`\n${failures.length} failed:\n- ${failures.join('\n- ')}`); process.exit(1) }
 console.log('\nall checks passed')
