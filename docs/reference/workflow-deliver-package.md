@@ -7,7 +7,7 @@ Reference, for anyone running a work package through the workflow.
 | File | `workflows/deliver-package.js` |
 | Command | `/engineering-practices:deliver-package` |
 | Args | `{ wp: "WP-NN" (required), plan: "<path>" (optional; default from CLAUDE.md or profile), branch: "<existing branch>" (optional), pr: "<existing PR>" (optional), prior: <handoff object> (optional) }` |
-| Run modes | v1: optional `run` arg for inline, partial or resumed runs; see [workflow run modes](workflow-run-modes.md) |
+| Run modes | v2: optional `run` arg for inline, partial or resumed runs, with review steps marked independent; see [workflow run modes](workflow-run-modes.md) |
 | Branch | `wp/<id>-<slug>` cut from the latest default branch; with `branch` or `pr`, that branch (and its open PR) instead |
 
 ## Phases
