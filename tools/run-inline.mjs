@@ -39,7 +39,12 @@ const review = (n) => {
   const base = join(reviewDir, slug(n.key))
   return { prompt: `${base}.md`, answer: `${base}.answer.${n.schema ? 'json' : 'txt'}` }
 }
-const recordCmd = (n) => `node ${process.argv[1]} ${file} ${statePath} --reviewer '${n.key}=<reviewer name>'`
+// Every printed command is one shell line: each argument that is not plain
+// is single-quoted, so a path or reviewer name with spaces or quotes stays
+// one argument when the line is run as is (pasted, or sh -c "$line").
+const shq = (s) => /^[A-Za-z0-9_@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`
+const self = `node ${shq(process.argv[1])} ${shq(file)} ${shq(statePath)}`
+const recordCmd = (n) => `${self} --reviewer ${shq(`${n.key}=<reviewer name>`)}`
 // A handback is often the reviewer's whole reply: prose around a fenced JSON
 // block. For a brief with a schema, take the JSON out of it so nobody has to
 // copy it out by hand; a text brief keeps its reply verbatim. With no waiting
@@ -102,7 +107,7 @@ const reviewText = (n) => [
   '',
   '## For the caller, not the reviewer',
   '',
-  `The reviewer writes its answer to ${review(n).answer}; the next run collects it from there. Never write that file yourself. If the reviewer could not write files, pass its reply as handed back instead: --answer '${n.key}=-' with the reply on stdin (the JSON is taken out of any surrounding text). Then record it, naming the reviewer, with:`,
+  `The reviewer writes its answer to ${review(n).answer}; the next run collects it from there. Never write that file yourself. If the reviewer could not write files, pass its reply as handed back instead: --answer ${shq(`${n.key}=-`)} with the reply on stdin (the JSON is taken out of any surrounding text). Then record it, naming the reviewer, with:`,
   '',
   `    ${recordCmd(n)}`,
   '',
@@ -181,12 +186,12 @@ for (const n of fresh ? [] : (state.next || []).filter((b) => b.independent && !
   if (!existsSync(f)) continue
   const v = parseAnswer(readFileSync(f, 'utf8'), n)
   const gap = answerGap(v, n.schema)
-  if (gap) { console.error(`${f}: answer for "${n.key}" does not fit its schema (${gap}); nothing recorded. Have the reviewer rewrite it, or pass --answer '${n.key}=<file>'.`); process.exit(2) }
+  if (gap) { console.error(`${f}: answer for "${n.key}" does not fit its schema (${gap}); nothing recorded. Have the reviewer rewrite it, or pass --answer ${shq(`${n.key}=<file>`)}.`); process.exit(2) }
   state.results[n.key] = v
   collected.push([n.key, f])
 }
 for (const [k] of collected) {
-  if (!state.reviewers[k]) { console.error(`collected the answer for "${k}" but no reviewer is named: add --reviewer '${k}=<who>' (nothing recorded)`); process.exit(2) }
+  if (!state.reviewers[k]) { console.error(`collected the answer for "${k}" but no reviewer is named: add --reviewer ${shq(`${k}=<who>`)} (nothing recorded)`); process.exit(2) }
 }
 for (const [k, f] of collected) { renameSync(f, `${f}.used`); console.log(`collected ${k} from ${f}`) }
 
@@ -223,7 +228,7 @@ if (out.status === 'done') {
   if ((out.self_reviewed || []).length) console.log(`self-reviewed, report as such: ${out.self_reviewed.join(', ')}`)
   console.log(JSON.stringify(out.result, null, 2))
   const again = typeof out.result === 'string' ? /^(waiting|not merged)\b/.test(out.result) : !!(out.result && /\b(run (it |this |the workflow )?again|re-?run)\b/i.test(String(out.result.next || '')))
-  if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  node ${process.argv[1]} ${file} ${statePath} --fresh`)
+  if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  ${self} --fresh`)
   // A run that stopped short (blocked, changes requested, failed) resumes
   // at the last answered step, once the cause is fixed.
   const r = out.result
@@ -231,12 +236,12 @@ if (out.status === 'done') {
   if (stopped) {
     const last = Object.keys(out.results || {}).pop()
     console.log('\nThis run stopped before the end. Fix the cause it names, then resume:')
-    if (last) console.log(`  node ${process.argv[1]} ${file} ${statePath} --redo '${last}'\n(asks "${last}", the last answered step, again and replays every answer before it; add --redo for any earlier step that must also be redone)`)
-    console.log(`  node ${process.argv[1]} ${file} ${statePath} --fresh\n(starts over from the first step with the same args)`)
+    if (last) console.log(`  ${self} --redo ${shq(last)}\n(asks "${last}", the last answered step, again and replays every answer before it; add --redo for any earlier step that must also be redone)`)
+    console.log(`  ${self} --fresh\n(starts over from the first step with the same args)`)
   }
 } else {
   console.log(`status: next, ${out.next.length} brief(s). Do each, write its answer to a file, then run:`)
-  console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.filter((n) => !n.independent).map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)
+  console.log(`  ${self} ${out.next.filter((n) => !n.independent).map((n) => `--answer ${shq(`${n.key}=<file>`)}`).join(' ')}`)
   console.log('Add --reviewer \'<key>=<who>\' for each independent brief another reviewer answered.')
   const independent = out.next.filter((n) => n.independent)
   if (independent.length) {
@@ -246,7 +251,7 @@ if (out.status === 'done') {
       // --fresh, or never collected): move it aside so it is not taken for this one.
       if (existsSync(review(n).answer)) renameSync(review(n).answer, `${review(n).answer}.stale`)
       writeFileSync(review(n).prompt, reviewText(n))
-      console.log(`${n.key}: send ${review(n).prompt} to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '${n.key}'); it writes its ${n.schema ? 'JSON ' : ''}answer to ${review(n).answer}, which the next run collects. Then run: ${recordCmd(n)}`)
+      console.log(`${n.key}: send ${review(n).prompt} to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt ${shq(n.key)}); it writes its ${n.schema ? 'JSON ' : ''}answer to ${review(n).answer}, which the next run collects. Then run: ${recordCmd(n)}`)
     }
   }
   for (const n of out.next) {

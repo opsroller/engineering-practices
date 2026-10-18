@@ -85,7 +85,7 @@ prompt has the reviewer write its answer to `state.json.review/<key>.answer.json
 and the next call collects that file when you name the reviewer with
 `--reviewer <key>=<who>`, so nothing is copied out of a transcript. If
 the reviewer cannot write files, pass its reply as handed back with
-`--answer <key>=-` on stdin. Never write a reviewer's answer file yourself. Keep the state file in your scratch space, not in the
+`--answer <key>=-` on stdin. Never write a reviewer's answer file yourself. Run a command the runner prints as one line, as it is; never word-split it in a loop, which breaks a quoted reviewer name with spaces. Keep the state file in your scratch space, not in the
 repository.
 
 Every answer is checked against its step's schema; a wrong-shaped one

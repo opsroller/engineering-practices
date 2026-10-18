@@ -78,6 +78,11 @@ runner, which keeps args and answers in a JSON file:
    node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer plan=plan.json --reviewer 'review=code-reviewer thread'
    ```
 
+   Quote a reviewer name that has spaces, as above. To run a command
+   the runner printed, use the line as it is (or `sh -c "$line"`);
+   never word-split it in a loop, which breaks a name with spaces into
+   several arguments.
+
    If the reviewer could not write files, pass its reply as it came back
    on stdin instead; the runner takes the JSON out of the text around it:
 
