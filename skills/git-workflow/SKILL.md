@@ -117,11 +117,18 @@ Message and type details: [commit-reference.md](commit-reference.md).
   issue the profile names, else an open issue titled "CI flake log")
   and under "Flaky checks" in the PR body. A second failure is real.
   Never re-run silently, twice, or for a failure in code the PR touches.
+- **Red on the default branch too.** Before fixing a red or hung check,
+  read the same check on the default branch's latest commit. Failing or
+  hanging there too, it is not the PR's: port an existing fix (an open
+  fix PR, the breaking commit's revert) in its own commit, or comment
+  once on the PR naming the check, the base run and why. Do not widen
+  the PR or wait on it. Merge over it only if the repository does not
+  require that check; never skip, disable or quarantine it.
 - Delete the branch after merging. Tell dependants (`peer-coordination`).
 - For a chore-sized change (a config line, a dependency bump, a docs
   index fix) the `small-change` workflow runs this whole section; for
   an existing branch or PR, `land-pr` runs it, cross-PR items, pass
-  carrying and the one-job re-run included.
+  carrying, the one-job re-run and red-on-base checks included.
 
 ## Trunk is red
 

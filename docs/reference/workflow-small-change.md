@@ -37,6 +37,7 @@ the PR's latest head SHA and reports one state:
 |---|---|
 | `green` | Every required check passed on the latest head |
 | `red: <check> <cause>` | A check failed; the cause comes from its log |
+| `red-on-base: <check>` | The only red or hung checks fail or hang on the default branch's latest commit too; handled as in [land-pr](workflow-land-pr.md#red-on-the-default-branch): a ported fix or one PR comment, never polled for. Open mode marks the PR ready; merge mode merges over a check the repository does not require (listing it under "Red on the default branch" in the PR body) and stops on a required one |
 | `pending: <checks>` | Still running |
 | `none` | The repository runs no CI on pull requests |
 
@@ -75,8 +76,10 @@ so.
 | Object `{ pr, ci, ready, reviewer, notes, next }` | Open mode finished; `next` gives the merge command, or, if the PR is still draft, says to poll CI and hand off by hand |
 | `not merged: ...: updated with conflict resolution; needs the reviewer's pass on <sha>` | The update needed a conflict resolution or regenerated files; the reviewer was asked again; run merge mode after their pass |
 | `waiting: CI ... is still running` | Merge mode found CI still running; schedule a check-in 5 minutes later, then run merge mode again |
+| Object `{ pr, merged: false, ci, red_on_base, next }` | Merge mode stopped on a required check red on the default branch too; run merge mode again when it clears |
 | `not merged: ...` | Merge mode stopped: still draft, no reviewer pass, comments unanswered, CI not green, or the branch kept moving |
 | `blocked: merge step ... failed` | Merge agent returned nothing |
 | Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged |
+| `red_on_base` (on any object result) | Checks red or hung on the default branch too |
 
 Open mode never merges. Run merge mode after the reviewer passes the PR.
