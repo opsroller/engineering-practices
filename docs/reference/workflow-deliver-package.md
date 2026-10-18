@@ -92,7 +92,10 @@ For `run.only` and `run.results`: `plan`, `build`, `docs`, `review:1` to `review
 | `blocked: build ... failed` | Build agent returned nothing |
 | `blocked: ... still has open items after review` | Blockers open after 3 rounds, or no review completed; lists them |
 | `blocked: ship step ... failed` | Ship agent returned nothing |
-| Object `{ wp, pr, ci, docs, undocumented, prior, status, caveats, overlaps, dependants, next }` | PR ready for the code reviewer; `prior` (the handoff's `from`) only when `prior` was given; `status` is the value set on the plan row or `"unchanged"`; `caveats` and `overlaps` (same-files work) are informational |
+| Object `{ wp, pr, ci, docs, undocumented, prior, status, caveats, overlaps, dependants, land, next }` | PR ready for the code reviewer; `prior` (the handoff's `from`) only when `prior` was given; `status` is the value set on the plan row or `"unchanged"`; `caveats` and `overlaps` (same-files work) are informational; `land` is the args for land-pr |
 
-The workflow never merges. After the reviewer passes, the author lands
-the PR with [land-pr](workflow-land-pr.md).
+The workflow never merges. After the reviewer passes, the author runs
+[land-pr](workflow-land-pr.md) with `land` as its args (`pr`, `row` and
+`notify`: the dependants and whoever assigned the package). land-pr
+squash-merges, then its Close phase confirms the package's row reads
+merged on the default branch and tells each of them.

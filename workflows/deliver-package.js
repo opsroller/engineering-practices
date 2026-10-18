@@ -332,6 +332,7 @@ return {
   caveats,
   overlaps: near,
   dependants: s.dependants || [],
-  next: `after the code reviewer passes, run /engineering-practices:land-pr { pr: "${s.pr_url}" } (keeps the branch current, polls CI itself and squash-merges), then tell each dependant`,
+  land: { pr: s.pr_url, row: `${plan}: ${wp}`, notify: [...(s.dependants || []).map((x) => `${x} (dependant)`), 'the coordinator or whoever assigned this package'] },
+  next: `after the code reviewer passes, run /engineering-practices:land-pr with the land object as args: it keeps the branch current, polls CI, squash-merges, confirms the ${wp} row reads merged on the default branch and tells each dependant and the assigner`,
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)

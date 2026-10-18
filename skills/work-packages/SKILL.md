@@ -69,8 +69,9 @@ A row without a testable done-when is not ready; ask the coordinator
 - [ ] Provenance recorded for anything not original (`provenance`)
 - [ ] PR ready, title a Conventional Commit, body lists stubs, follow-ups, `Refs: WP-<id>`
 - [ ] Row status set in the same PR to the value it should have once merged (the plan's done value unless the project closes rows elsewhere), so the default branch is right at squash-merge
-- [ ] Reviewer passed it; you squash-merged it (`git-workflow`)
-- [ ] Each dependant told, with the PR link (`peer-coordination`)
+- [ ] Reviewer passed it; you squash-merged it (`git-workflow`; `land-pr` with deliver-package's `land` args does this and the next two)
+- [ ] Row reads merged on the default branch after the merge
+- [ ] Each dependant and whoever assigned the package told, with the PR link (`peer-coordination`)
 
 ## Splitting work into packages (for whoever plans)
 

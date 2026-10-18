@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'land-pr',
-  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>"',
+  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>", row: "<plan file and item whose status row must read merged on the default branch, optional>", notify: ["<who to tell once merged: dependants, the coordinator or whoever assigned the work>"]',
   phases: [
     { title: 'Adopt', detail: 'find or open the PR for the branch; read the default branch; confirm you can push to the head branch' },
     { title: 'Follow-up', detail: 'only with followup: make that change on the head branch, run the local check, commit, push, note it in the PR body' },
     { title: 'Sync', detail: 'merge the latest default branch in, resolve conflicts, re-run local checks, push, poll CI; repeat while the default branch moves (max 3 rounds)' },
     { title: 'Review', detail: 'read the reviewer verdict on the current head; ask for review if nobody has been asked; on a pass with should-fix items, fix, push and ask for a pass on the new head' },
     { title: 'Merge', detail: 'refresh the PR body, confirm head and base are still the verified ones, squash-merge' },
+    { title: 'Close', detail: 'only with row or notify: confirm the status row reads merged on the default branch, fix it if not, tell each notify target with the PR link' },
   ],
 }
 
@@ -103,7 +104,7 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }; add followup: "<change to make on the PR first, optional>"'
+const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }; add followup: "<change to make on the PR first, optional>", row: "<plan file and item whose status row must read merged, optional>", notify: ["<dependant, coordinator or assigner to tell once merged>"]'
 if (!args || (!args.pr && !args.branch)) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
@@ -111,6 +112,16 @@ const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
 // reviewer, or one sharing the author's account, is reached by message.
 const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
 const MAX_SYNC = 3
+const CLOSE = {
+  type: 'object',
+  properties: {
+    row: { type: 'string', enum: ['already', 'fixed', 'not-fixed', 'none'] },
+    row_pr: { type: 'string' },
+    notified: { type: 'array', items: { type: 'string' } },
+    not_notified: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['row', 'notified'],
+}
 const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
 
 // PR events (CI results, reviews) do not reliably reach an agent, and shell
@@ -302,11 +313,31 @@ if (!m.merged) {
     ? `not merged: ${pr} or ${a.default_branch} moved after verification; run land-pr again, or use the project's merge queue if it has one`
     : `not merged: ${pr}: ${m.reason || 'no reason given'}`
 }
+const row = args.row ? String(args.row).trim() : ''
+const notify = Array.isArray(args.notify) ? args.notify.map(String).filter((x) => x.trim()) : (args.notify ? [String(args.notify)] : [])
+const done = { pr, merged: true, squash_sha: m.squash_sha, ci: s.ci }
+if (!row && !notify.length) return { ...done, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
+
+// The merge is the end of the change but not of the work: the plan row and
+// the people waiting on it are what threads otherwise do by hand.
+phase('Close')
+const c = await agent(
+  `${pr} is squash-merged as ${m.squash_sha || 'the squash commit'} on ${a.default_branch}.
+${row ? `1. Fetch ${a.default_branch} and read the status row for ${row}. If it already reads the project's merged-state value (from the plan's legend or status convention), report "already". If not, set it with the smallest change the project allows for plan rows: a direct commit only where the project lets plan rows change outside a PR, otherwise /engineering-practices:small-change { change: "mark ${row} with its merged-state value, Refs: ${pr}", merge: true }; report "fixed" with the PR link, or "not-fixed" and why.` : '1. No row was given: report "none".'}
+${notify.length ? `2. Tell each of these, once, with the PR link, the squash SHA and one line on what landed: 
+${list(notify)}
+An agent session or thread gets a cross-session message (engineering-practices peer-coordination, "Find the right agent"); a person or bot with its own account gets a mention on the PR or the issue it tracks. Never message or mention the project owner unless the profile names them for this. Report who you told and who you could not reach.` : '2. Nobody to notify.'}
+Do not change anything else.`,
+  { schema: CLOSE, phase: 'Close', label: 'close' },
+)
+if (!c) return { ...done, row: 'unverified', notified: [], next: `the close step returned nothing: check ${row || 'the status row'} on ${a.default_branch} and tell ${notify.join(', ') || 'whoever asked'} by hand` }
+const missed = c.not_notified || []
 return {
-  pr,
-  merged: true,
-  squash_sha: m.squash_sha,
-  ci: s.ci,
-  next: 'tell whoever asked for the change, and any dependant, with the PR link',
+  ...done,
+  row: c.row,
+  ...(c.row_pr ? { row_pr: c.row_pr } : {}),
+  notified: c.notified,
+  ...(missed.length ? { not_notified: missed } : {}),
+  next: c.row === 'not-fixed' || missed.length ? `still owed: ${[c.row === 'not-fixed' ? `the ${row} status row` : '', ...missed].filter(Boolean).join('; ')}` : 'done',
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)

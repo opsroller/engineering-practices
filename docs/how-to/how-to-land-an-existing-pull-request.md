@@ -31,6 +31,13 @@ merge without letting it drift behind the default branch.
    /engineering-practices:land-pr {"pr": "42", "followup": "rename parseOpts to parseOptions as the reviewer asked"}
    ```
 
+   To close the work out after the merge, pass `row` (the plan file and
+   item whose status row must read merged) and `notify` (who to tell):
+
+   ```
+   /engineering-practices:land-pr {"pr": "42", "row": "docs/plan.md: WP-7", "notify": ["WP-9 thread (dependant)", "the coordinator"]}
+   ```
+
 2. If it returns `blocked: follow-up ... not added`, the change is too
    big to ride on this PR: use small-change with `pr`, or a work package.
    If it returns `blocked: ... conflicts that lose behaviour either way`,
@@ -53,8 +60,10 @@ merge without letting it drift behind the default branch.
    verdict yourself later and run it again once the reviewer has passed
    the PR.
 
-7. When it returns `merged: true`, tell whoever asked for the change and
-   any dependants, with the PR link.
+7. When it returns `merged: true` with `next: "done"`, the row and the
+   messages are handled. Without `row` or `notify`, tell whoever asked
+   for the change and any dependants yourself, with the PR link. If
+   `next` lists something still owed, do that.
 
 ## If the default branch keeps moving
 

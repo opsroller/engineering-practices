@@ -7,7 +7,7 @@ squash merge.
 |---|---|
 | File | `workflows/land-pr.js` |
 | Command | `/engineering-practices:land-pr` |
-| Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }`; either takes `followup: "<change to add to the PR before landing>"` (optional) |
+| Args | `{ pr: "<number or URL>" }`, or `{ branch: "<existing branch>", title: "<Conventional Commit title>" (optional) }`; either takes `followup: "<change to add to the PR before landing>"`, `row: "<plan file and item whose status row must read merged>"` and `notify: ["<who to tell once merged>"]` (all optional) |
 | Run modes | v2: optional `run` arg for inline, partial or resumed runs (no independent steps); see [workflow run modes](workflow-run-modes.md) |
 | Use when | The work is already on a branch or PR (yours, an assigned branch, or one handed over) and needs to be kept current and landed |
 | Run again | Safe to re-run at any point; each run starts from the PR's current state |
@@ -21,10 +21,11 @@ squash merge.
 | Sync | Merges the latest default branch in, resolves conflicts, re-runs the local check, pushes, polls CI; repeats if the default branch moved meanwhile (3 rounds at most) |
 | Review | Reads the reviewer verdict on the current head; asks for review (and marks the PR ready) if nobody has been asked. On a pass with should-fix items, makes them on the head branch, answers each comment and asks for a pass on the new head |
 | Merge | Refreshes the PR title and body, confirms head and base are still the verified ones, squash-merges with the verified head SHA, deletes the branch |
+| Close | Only with `row` or `notify`: reads the status row on the default branch and, if it does not read the project's merged-state value, sets it (a direct commit only where the project allows it, otherwise small-change); messages each `notify` target once with the PR link and squash SHA (agent sessions by cross-session message, people by mention; never the project owner) |
 
 ## Step labels
 
-For `run.only` and `run.results`: `adopt`, `followup` (with `followup` only), `sync:1` to `sync:3`, `review`, `should-fix` (after a pass with should-fix items), `merge`.
+For `run.only` and `run.results`: `adopt`, `followup` (with `followup` only), `sync:1` to `sync:3`, `review`, `should-fix` (after a pass with should-fix items), `merge`, `close` (with `row` or `notify` only).
 Pass `results` only to resume the same run; a new land-pr run starts without them, because it re-reads the PR's current state.
 
 ## Conflict rules
@@ -79,4 +80,5 @@ includes it.
 | Object `{ pr, ci, review, fixed, skipped, next }` | The reviewer passed with should-fix items; `fixed` were pushed, `skipped` (would widen the PR) were answered; waiting on a pass of the new head |
 | `blocked: should-fix round ... failed`, `blocked: local check fails ... after the should-fix edits` | The should-fix step returned nothing, or broke the local check |
 | `not merged: ... moved after verification` | Head or base changed between verification and merge; run again, or use the project's merge queue |
-| Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged |
+| Object `{ pr, merged, squash_sha, ci, next }` | Squash-merged (no `row` or `notify`) |
+| Object `{ pr, merged, squash_sha, ci, row, row_pr, notified, not_notified, next }` | Squash-merged and closed out: `row` is `already`, `fixed` (with `row_pr`), `not-fixed` or `none`; `next` is `done` or lists what is still owed |

@@ -53,11 +53,14 @@ squash commit.
    Answer each comment by changing the code, or with a reasoned reply.
 
 5. When the reviewer has passed it, land it yourself with
-   [land-pr](how-to-land-an-existing-pull-request.md), which brings the
-   default branch in, re-checks CI and squash-merges. Do not wait for the
-   project owner.
+   [land-pr](how-to-land-an-existing-pull-request.md), passing the
+   result's `land` object as the args. It brings the default branch in,
+   re-checks CI, squash-merges, confirms the package's row reads merged on
+   the default branch, and tells each dependant and whoever assigned the
+   package. Do not wait for the project owner.
 
-6. Tell each dependant listed in the result, with the PR link.
+6. If land-pr's `next` is not `done`, finish what it lists (a row it
+   could not fix, someone it could not reach).
 
 ## If trunk breaks after the merge
 
