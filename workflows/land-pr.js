@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'land-pr',
-  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }',
+  description: 'Take an existing branch or pull request to a squash merge, in any role: keep it current with the default branch, resolve conflicts, poll CI yourself, check the reviewer verdict, refresh the PR body and squash-merge. args: { pr: "<number or URL>" } or { branch: "<existing branch>", title: "<Conventional Commit title if a PR must be opened, optional>" }, plus followup: "<a change to add to the PR before landing, optional>", row: "<plan file and item whose status row must read merged on the default branch, optional>", notify: ["<who to tell once merged: dependants, the coordinator or whoever assigned the work>"]',
   phases: [
     { title: 'Adopt', detail: 'find or open the PR for the branch; read the default branch; confirm you can push to the head branch' },
+    { title: 'Follow-up', detail: 'only with followup: make that change on the head branch, run the local check, commit, push, note it in the PR body' },
     { title: 'Sync', detail: 'merge the latest default branch in, resolve conflicts, re-run local checks, push, poll CI; repeat while the default branch moves (max 3 rounds)' },
-    { title: 'Review', detail: 'read the reviewer verdict on the current head; ask for review if nobody has been asked' },
+    { title: 'Review', detail: 'read the reviewer verdict on the current head; ask for review if nobody has been asked; on a pass with should-fix items, fix, push and ask for a pass on the new head' },
     { title: 'Merge', detail: 'refresh the PR body, confirm head and base are still the verified ones, squash-merge' },
+    { title: 'Close', detail: 'only with row or notify: confirm the status row reads merged on the default branch, fix it if not, tell each notify target with the PR link' },
   ],
 }
 
@@ -91,7 +93,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     if (value === '__run_halted__') {
       return {
         run: 'inline', status: 'next', next, results: out, reviewers: by, self_reviewed, skipped, logs,
-        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done".',
+        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done". To avoid pasting results back on every call, drive the run with engineering-practices tools/run-inline.mjs and a state file instead: it stores each answer and prints only the next briefs.',
       }
     }
     return { run: mode, status: 'done', result: value, results: out, reviewers: by, self_reviewed, skipped, logs }
@@ -102,15 +104,29 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }'
+const USAGE = 'usage: land-pr { pr: "<number or URL>" } or land-pr { branch: "<existing branch>", title: "<Conventional Commit title, optional>" }; add followup: "<change to make on the PR first, optional>", row: "<plan file and item whose status row must read merged, optional>", notify: ["<dependant, coordinator or assigner to tell once merged>"]'
 if (!args || (!args.pr && !args.branch)) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
 const MAX_SYNC = 3
+const CLOSE = {
+  type: 'object',
+  properties: {
+    row: { type: 'string', enum: ['already', 'fixed', 'not-fixed', 'none'] },
+    row_pr: { type: 'string' },
+    notified: { type: 'array', items: { type: 'string' } },
+    not_notified: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['row', 'notified'],
+}
+const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
 
-// PR events (CI results, reviews) do not reliably reach an agent, so every
-// wait here is a bounded poll the agent runs itself.
-const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (for example \`gh pr checks <pr> --watch --fail-fast\`, or the hosting service's checks API or tool), polling every 30 to 60 seconds for up to 20 minutes, and make sure the result belongs to that SHA, not an earlier push. Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>" (timed out), or "none" (the repository runs no CI on PRs).`
+// PR events (CI results, reviews) do not reliably reach an agent, and shell
+// sleeps may be blocked, so a wait is a scheduled check-in, then a re-run.
+const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
 
 const ADOPT = {
   type: 'object',
@@ -125,6 +141,16 @@ const ADOPT = {
     problem: { type: 'string' },
   },
   required: ['head_branch', 'default_branch', 'can_push', 'local_check'],
+}
+const FOLLOWUP = {
+  type: 'object',
+  properties: {
+    done: { type: 'boolean' },
+    head_sha: { type: 'string' },
+    subject: { type: 'string' },
+    reason: { type: 'string' },
+  },
+  required: ['done'],
 }
 const SYNC = {
   type: 'object',
@@ -142,12 +168,22 @@ const SYNC = {
 const VERDICT = {
   type: 'object',
   properties: {
-    state: { type: 'string', enum: ['passed', 'changes', 'waiting'] },
+    state: { type: 'string', enum: ['passed', 'should-fix', 'changes', 'waiting'] },
     reviewer: { type: 'string' },
     open_items: { type: 'array', items: { type: 'string' } },
     asked: { type: 'boolean' },
   },
   required: ['state'],
+}
+const SHOULDFIX = {
+  type: 'object',
+  properties: {
+    head_sha: { type: 'string' },
+    check_passed: { type: 'boolean' },
+    fixed: { type: 'array', items: { type: 'string' } },
+    skipped: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['check_passed'],
 }
 const MERGE = {
   type: 'object',
@@ -177,6 +213,25 @@ if (!a) return `blocked: could not adopt ${target} (agent returned nothing). ${U
 if (a.problem || !a.can_push) return `blocked: ${target}: ${a.problem || 'cannot push to the head branch'}`
 const pr = a.pr_url || a.pr_number || target
 
+// A follow-up (a reviewer's ask, a fix found while landing) goes on the
+// PR's own head before syncing, so one review and one CI run cover it.
+const followup = args.followup ? String(args.followup).trim() : ''
+if (followup) {
+  phase('Follow-up')
+  const f = await agent(
+    `Add this follow-up change to ${pr} before it lands: "${followup}". Follow the engineering-practices skills git-workflow and provenance.
+1. Fetch, then check out ${a.head_branch} at its remote tip${a.shared_branch ? ' (others push to it: pull their commits first)' : ''}. Do not cut a new branch or open a new PR.
+2. Make the smallest edit that does it; touch nothing else. Keep the license header rule on any new file. If it turns out to need new behaviour another role would notice, a contract change or a new doc page, do not make it: return done: false with the reason.
+3. Run the local check: ${a.local_check}. Fix what your edit broke.
+4. Commit as a Conventional Commit, push to ${a.head_branch}, and add one line on the follow-up to the PR description.
+Return whether it is done, the new head SHA, the commit subject, and the reason if not done.`,
+    { schema: FOLLOWUP, phase: 'Follow-up', label: 'followup' },
+  )
+  if (!f) return `blocked: follow-up on ${pr} failed (agent returned nothing); check ${a.head_branch} for a half-made change`
+  if (!f.done) return `blocked: follow-up "${followup}" not added to ${pr}: ${f.reason || 'no reason given'}. Use small-change { change, pr } or deliver-package for it.`
+  log(`follow-up on ${pr}: ${f.subject || followup} at ${f.head_sha || 'new head'}; the reviewer must pass the new head`)
+}
+
 let s = null
 for (let round = 1; round <= MAX_SYNC; round++) {
   phase('Sync')
@@ -198,7 +253,7 @@ Return the head SHA, the ${a.default_branch} SHA you merged, conflicts resolved,
   if (!s) return `blocked: sync of ${pr} failed (agent returned nothing); check the branch for a half-finished merge`
   if ((s.unresolved || []).length) return `blocked: ${pr} has conflicts that lose behaviour either way; resolve by hand or with the other change's author:\n${list(s.unresolved)}`
   if (!s.check_passed) return `blocked: local check fails on ${pr} after syncing with ${a.default_branch}`
-  if (/^pending/.test(s.ci || '')) return `waiting: CI on ${pr} is still running (${s.ci}); check it yourself later, then run land-pr again`
+  if (/^pending/.test(s.ci || '')) return `waiting: CI on ${pr} is still running (${s.ci}); ${WAIT}, then run land-pr again`
   if (!/^(green|none)/.test(s.ci || '')) return `blocked: CI on ${pr} is ${s.ci}; fix it, then run land-pr again`
   if (!s.base_moved) break
   log(`round ${round}: ${a.default_branch} moved while CI ran`)
@@ -209,17 +264,36 @@ phase('Review')
 const v = await agent(
   `Read the review state of ${pr} at head ${s.head_sha || '(current head)'}. Do not edit code.
 The reviewer is the project's code-reviewer role, or the peer the profile names; never the project owner unless the profile says so. A pass counts only if it covers the current head or the only commits after it are merges of ${a.default_branch} with no conflict edits in reviewed files. Read reviews, review comments and PR comments (a reviewer on a shared account may post its verdict as a comment review).
-Return state "passed", "changes" (list every unanswered or unfixed finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ask the reviewer with the PR link and one line on what changed (engineering-practices peer-coordination), and return asked: true.`,
+${followup ? `A follow-up commit ("${followup}") was just added, so a pass on an earlier head does not count; the reviewer must pass a head that includes it. ` : ''}Return state "passed" (a pass with nothing left to do), "should-fix" (the reviewer passed it but asked for non-blocking fixes before merge, such as should-fix or nit items they want done now: list each under open_items), "changes" (list every unanswered or unfixed blocking finding), or "waiting". If waiting and nobody has been asked for this head, mark the PR ready if it is a draft and CI is green or none, ${REVIEWER}, and return asked: true.`,
   { schema: VERDICT, phase: 'Review', label: 'review' },
 )
 if (!v) return `blocked: could not read the review state of ${pr} (agent returned nothing)`
 if (v.state === 'changes') return `changes requested on ${pr}:\n${list(v.open_items)}\nFix them on ${a.head_branch}, answer each comment, then run land-pr again.`
+if (v.state === 'should-fix') {
+  const sf = await agent(
+    `The reviewer passed ${pr} but asked for these fixes before merge:
+${list(v.open_items)}
+On ${a.head_branch} (fetch, check out its remote tip${a.shared_branch ? ', pull others\' commits first' : ''}), make each with the smallest edit, run the local check (${a.local_check}), commit (Conventional Commits) and push. Answer each review comment with what changed. A pass covers one head only, so ${REVIEWER}, asking for a pass on the new head with one line per fix. If an item would widen the PR, do not make it: reply why and list it under skipped. Follow engineering-practices git-workflow.
+Return the new head SHA, whether the local check passed, the items fixed, and the items skipped with why.`,
+    { schema: SHOULDFIX, phase: 'Review', label: 'should-fix' },
+  )
+  if (!sf) return `blocked: should-fix round on ${pr} failed (agent returned nothing); check ${a.head_branch} for a half-made change`
+  if (!sf.check_passed) return `blocked: local check fails on ${pr} after the should-fix edits`
+  return {
+    pr,
+    ci: s.ci,
+    review: `should-fix items pushed at ${sf.head_sha || 'a new head'}; waiting on ${v.reviewer || 'the reviewer'} to pass it`,
+    fixed: sf.fixed || [],
+    skipped: sf.skipped || [],
+    next: `${WAIT}; then run /engineering-practices:land-pr { pr: "${pr}" } again, which re-syncs, re-checks CI and merges once the new head is passed`,
+  }
+}
 if (v.state !== 'passed') {
   return {
     pr,
     ci: s.ci,
     review: `waiting on ${v.reviewer || 'the reviewer'}${v.asked ? ' (asked now)' : ''}`,
-    next: `check the verdict yourself later, do not wait to be notified; when it passes, run /engineering-practices:land-pr { pr: "${pr}" } again`,
+    next: `check the verdict yourself, do not wait to be notified: ${WAIT}; when it passes, run /engineering-practices:land-pr { pr: "${pr}" } again`,
   }
 }
 
@@ -239,11 +313,31 @@ if (!m.merged) {
     ? `not merged: ${pr} or ${a.default_branch} moved after verification; run land-pr again, or use the project's merge queue if it has one`
     : `not merged: ${pr}: ${m.reason || 'no reason given'}`
 }
+const row = args.row ? String(args.row).trim() : ''
+const notify = Array.isArray(args.notify) ? args.notify.map(String).filter((x) => x.trim()) : (args.notify ? [String(args.notify)] : [])
+const done = { pr, merged: true, squash_sha: m.squash_sha, ci: s.ci }
+if (!row && !notify.length) return { ...done, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
+
+// The merge is the end of the change but not of the work: the plan row and
+// the people waiting on it are what threads otherwise do by hand.
+phase('Close')
+const c = await agent(
+  `${pr} is squash-merged as ${m.squash_sha || 'the squash commit'} on ${a.default_branch}.
+${row ? `1. Fetch ${a.default_branch} and read the status row for ${row}. If it already reads the project's merged-state value (from the plan's legend or status convention), report "already". If not, set it with the smallest change the project allows for plan rows: a direct commit only where the project lets plan rows change outside a PR, otherwise /engineering-practices:small-change { change: "mark ${row} with its merged-state value, Refs: ${pr}", merge: true }; report "fixed" with the PR link, or "not-fixed" and why.` : '1. No row was given: report "none".'}
+${notify.length ? `2. Tell each of these, once, with the PR link, the squash SHA and one line on what landed: 
+${list(notify)}
+An agent session or thread gets a cross-session message (engineering-practices peer-coordination, "Find the right agent"); a person or bot with its own account gets a mention on the PR or the issue it tracks. Never message or mention the project owner unless the profile names them for this. Report who you told and who you could not reach.` : '2. Nobody to notify.'}
+Do not change anything else.`,
+  { schema: CLOSE, phase: 'Close', label: 'close' },
+)
+if (!c) return { ...done, row: 'unverified', notified: [], next: `the close step returned nothing: check ${row || 'the status row'} on ${a.default_branch} and tell ${notify.join(', ') || 'whoever asked'} by hand` }
+const missed = c.not_notified || []
 return {
-  pr,
-  merged: true,
-  squash_sha: m.squash_sha,
-  ci: s.ci,
-  next: 'tell whoever asked for the change, and any dependant, with the PR link',
+  ...done,
+  row: c.row,
+  ...(c.row_pr ? { row_pr: c.row_pr } : {}),
+  notified: c.notified,
+  ...(missed.length ? { not_notified: missed } : {}),
+  next: c.row === 'not-fixed' || missed.length ? `still owed: ${[c.row === 'not-fixed' ? `the ${row} status row` : '', ...missed].filter(Boolean).join('; ')}` : 'done',
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)

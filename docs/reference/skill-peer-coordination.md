@@ -7,6 +7,16 @@ Reference, for roles whose work touches another agent's.
 | File | `skills/peer-coordination/SKILL.md` |
 | Use when | Depending on, blocking or changing another agent's work; touching a path another role owns; changing a contract; handing off |
 
+## Overlap check
+
+Before starting work, look at open PRs, recent branches, the plan's status rows and the running sessions or threads the project's tools list.
+
+| Found | Action |
+|---|---|
+| Same goal in flight | Do not start a second copy; agree with its owner who does it |
+| Same files, package or contract | Start; message the owner first, keep the edit small |
+| Nothing | Start |
+
 ## Message routing
 
 | Situation | Recipient |

@@ -19,6 +19,24 @@ roles; messages are how you change it safely.
   Message them with `send_message`. Reach the coordinator through
   `get_channel_session_id`.
 - No owner for a path or contract? Ask the coordinator, do not adopt it.
+- Asking for a review: a review request on the hosting service reaches
+  only an account. When the reviewer is an agent session or shares your
+  account, message its session or thread with the PR link, head SHA and
+  one line on what changed, and say where to post the verdict (a comment
+  review on a shared account).
+
+## Check for overlapping work
+
+Before you start a package or a change, look for anyone already on it:
+open pull requests and recently pushed branches, the plan's status rows,
+and the running sessions or threads your project tools list (read them;
+do not ask). Then:
+
+| Found | Do |
+|---|---|
+| Same goal in flight | Do not start a second copy. Message its owner: take it over, split it, or leave it. |
+| Same files, package or contract | Start, but message the owner first, keep your edit small, and expect to merge their change in. |
+| Nothing | Start. |
 
 ## When to message
 

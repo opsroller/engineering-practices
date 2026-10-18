@@ -25,6 +25,6 @@ to `results` by key; run again; stop at `status: "done"`.
 ## Author rules
 
 Unique `label` on every `agent()` call; block inserted with
-`tools/apply-run-modes.mjs`; checked with `tools/check-workflow.mjs`.
+`tools/apply-run-modes.mjs`; checked with `tools/check-workflow.mjs`; long inline runs driven from a state file with `tools/run-inline.mjs`.
 
 Full field list: [workflow run modes](workflow-run-modes.md).

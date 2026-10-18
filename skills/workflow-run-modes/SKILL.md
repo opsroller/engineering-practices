@@ -66,6 +66,22 @@ after another. The workflow's own branches, loops and caps still apply,
 because it decides each next step from your answers. Answer honestly:
 an empty or failing answer takes the same path a failed agent would.
 
+## Keep the resume light
+
+Each inline call re-sends every earlier answer. For a workflow with more
+than two or three phases, drive it with the state file runner instead:
+it keeps `results` in a file and each call sends only the new answers.
+
+```
+node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/<name>.js state.json --args '<the args JSON>'
+# do each printed brief, write its answer to a file, then:
+node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/<name>.js state.json --answer plan=plan.json
+```
+
+Add `--reviewer <key>=<who>` for each independent brief someone else
+answered. Keep the state file in your scratch space, not in the
+repository.
+
 If the workflow tool itself is unavailable, read the workflow file and
 do each `agent()` prompt in order the same way, with its args filled in.
 A call with `independent: true` in its options goes to a separate
@@ -89,7 +105,7 @@ steps the chosen ones depend on. To redo a step, delete its key.
 - Pass `independent: true` in the options of every step that reviews or
   checks work the same run produced (a review, a fresh read against a
   brief, a verification of claims). Do not mark steps that only gather,
-  build or fix.
+  build or fix. An independent step only reads and reports: it never edits, commits or pushes. A step that checks and also applies fixes (for example a docs check that fixes what it finds) had a part in the work it judges, so it is not independent; split it into an independent check and a separate fix step after it. The checker treats an independent prompt that says fix, apply, edit, commit or push as writing unless it also says it is read-only, so "Fix what you can" fails and "Fix nothing; list problems" passes.
 - Keep the run-modes block verbatim. Insert or refresh it with
   `node tools/apply-run-modes.mjs <workflow.js>` from the
   engineering-practices repo; never edit a copy by hand.

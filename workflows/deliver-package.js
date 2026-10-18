@@ -3,11 +3,11 @@ export const meta = {
   name: 'deliver-package',
   description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>", prior: "<handoff object or full result of a role workflow that already built the work, optional>" }',
   phases: [
-    { title: 'Plan', detail: 'onboard, read the package and contracts, plan slices, stubs and affected Diataxis doc kinds' },
+    { title: 'Plan', detail: 'onboard, check for overlapping work, read the package and contracts, plan slices, stubs, caveats and affected Diataxis doc kinds' },
     { title: 'Build', detail: 'implement on the package branch with provenance recorded; with prior, only what the prior work left out' },
     { title: 'Document', detail: 'write or update the planned Diataxis pages in the same PR; skipped when prior already wrote them' },
     { title: 'Check', detail: 'independent review of change and docs, fix loop (max 3 rounds)' },
-    { title: 'Ship', detail: 'PR ready for the code reviewer, plan row updated, dependants listed' },
+    { title: 'Ship', detail: 'PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
   ],
 }
 
@@ -92,7 +92,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     if (value === '__run_halted__') {
       return {
         run: 'inline', status: 'next', next, results: out, reviewers: by, self_reviewed, skipped, logs,
-        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done".',
+        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done". To avoid pasting results back on every call, drive the run with engineering-practices tools/run-inline.mjs and a state file instead: it stores each answer and prints only the next briefs.',
       }
     }
     return { run: mode, status: 'done', result: value, results: out, reviewers: by, self_reviewed, skipped, logs }
@@ -103,7 +103,11 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: "<handoff from a role workflow, optional>" }'
+const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: <handoff from a role workflow, optional: the whole result or its handoff field, { branch and/or pr (at least one), tests_pass: true (required), from, docs: [pages], undocumented: [..], non_original: [..], notes } > }'
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
+
 if (!args || !args.wp) return USAGE
 const wp = String(args.wp)
 const plan = args.plan ? String(args.plan) : "the project's work-package plan (path in CLAUDE.md or the project profile)"
@@ -118,11 +122,20 @@ const unwrap = (o) => {
   if (o.handoff && typeof o.handoff === 'object') return o.handoff
   return o
 }
-const prior = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
+const unwrapped = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
+// The top-level branch and pr fill in a handoff that lacks them, so a role
+// result with no branch of its own can still be shipped.
+const prior = unwrapped && { ...unwrapped, branch: unwrapped.branch || args.branch, pr: unwrapped.pr || args.pr }
 if (args.prior !== undefined && args.prior !== null) {
-  if (!prior) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
-  if (!prior.branch && !prior.pr) return 'blocked: prior names no branch or pr, so there is no built work to ship'
-  if (prior.tests_pass !== true) return `blocked: prior work from ${prior.from || 'the role workflow'} does not report tests_pass: true; finish it there first`
+  if (!unwrapped) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
+  // Report every problem with the handoff at once, not one per run.
+  const bad = []
+  if (!prior.branch && !prior.pr) bad.push('names no branch or pr, and none was given as a top-level branch or pr arg, so there is no built work to ship')
+  if (prior.tests_pass !== true) bad.push(`does not report tests_pass: true (got ${JSON.stringify(prior.tests_pass)}); finish the work in ${prior.from || 'the role workflow'} first`)
+  for (const k of ['docs', 'undocumented', 'non_original']) {
+    if (prior[k] !== undefined && !Array.isArray(prior[k])) bad.push(`${k} must be a list, got ${typeof prior[k]}`)
+  }
+  if (bad.length) return `blocked: prior handoff is not usable:\n- ${bad.join('\n- ')}\n${USAGE}`
 }
 const priorFrom = prior ? String(prior.from || 'a role workflow') : ''
 const priorDocs = prior && Array.isArray(prior.docs) ? prior.docs.map(String) : []
@@ -140,6 +153,13 @@ const built = prior
   ? `The work for ${wp} is already built and tested on that branch by ${priorFrom}${priorDocs.length ? `, with docs pages ${priorDocs.join(', ')}` : ''}${prior.notes && prior.notes.length ? `; its notes: ${[].concat(prior.notes).join('; ')}` : ''}. Do not rebuild it.`
   : ''
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// Two sessions doing the same work is the costliest waste there is, so
+// every workflow that starts work first looks for work already in flight.
+const OVERLAP = (self) => `Before planning, look for overlapping work in flight${self ? ` (other than ${self})` : ''}: the repository's open pull requests and recently pushed branches, the plan's status rows, and, where your tools can list them, other running sessions, threads or assignees and what they are on (read them; do not ask). Return overlaps: each item that shares this work's goal (kind "duplicate") or changes the same files, package or contract (kind "same-files"), with a link and its owner. Return an empty list if you find none.`
+const OVERLAPS = { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['duplicate', 'same-files'] }, what: { type: 'string' }, link: { type: 'string' }, owner: { type: 'string' } }, required: ['kind', 'what'] } }
+const dupes = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'duplicate') : [])
+const shared = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'same-files') : [])
+const said = (o) => `${o.what}${o.link ? ` (${o.link})` : ''}${o.owner ? `, owner ${o.owner}` : ''}`
 
 const PLAN = {
   type: 'object',
@@ -163,8 +183,11 @@ const PLAN = {
       },
     },
     blockers: { type: 'array', items: { type: 'string' } },
+    caveats: { type: 'array', items: { type: 'string' } },
+    ship_status: { type: 'string' },
+    overlaps: OVERLAPS,
   },
-  required: ['branch', 'owned_paths', 'steps', 'done_when', 'docs'],
+  required: ['branch', 'owned_paths', 'steps', 'done_when', 'docs', 'ship_status', 'overlaps'],
 }
 const BUILD = {
   type: 'object',
@@ -198,6 +221,7 @@ const SHIP = {
     pr_url: { type: 'string' },
     ci: { type: 'string' },
     dependants: { type: 'array', items: { type: 'string' } },
+    status_set: { type: 'string' },
   },
   required: ['pr_url', 'ci'],
 }
@@ -206,14 +230,21 @@ phase('Plan')
 const p = await agent(
   `Follow the engineering-practices skills project-onboarding, work-packages and documentation for ${wp} in ${plan}.
 Read CLAUDE.md, the project profile, the package row and every contract it touches; run the baseline build and tests.
+${OVERLAP(prBranch.pr || prBranch.branch || '')}
 ${existing ? existing + ' Return that branch name, after confirming you can push to it and reading any work already on it.' : ''}
 ${built ? built + ' Compare it with the package row and list under steps only what the row still needs that the branch lacks (often nothing), and under docs only pages still missing.' : ''}
 Return: the branch name (${existing ? 'the existing one' : 'wp/<id>-<slug>'}), owned paths, implementation steps as small slices, dependencies to stub against their contracts, the done-when line, the project's docs layout, and the Diataxis plan: for each thing the package will produce, use the compass (action/cognition x study/work) and the documentation skill's "what each kind of work owes" table to list the doc kind, the page to add or update, and why.
-List anything that prevents starting (missing row, no testable done-when, missing contract) under blockers. Do not write code yet.`,
+Return ship_status: the status value the package row should carry in this PR, so the default branch is right the moment the PR squash-merges. Read the plan's status legend, the profile and how earlier rows were set: if the project marks a row done (or merged) in the package's own PR, return that value; if it keeps an in-review value while the PR is open and closes rows elsewhere, return that; if it does not say, return its done value. Return "unchanged" only when the project changes rows outside package PRs.
+List only what prevents starting (missing row, no testable done-when, missing contract) under blockers. Risks that do not stop the work (an assumption you made, a dependency stubbed for now, a test you cannot run here, a part that may need rework) go under caveats, never under blockers. Do not write code yet.`,
   { schema: PLAN, phase: 'Plan', label: 'plan' },
 )
 if (!p) return `blocked: planning for ${wp} failed (agent returned nothing). ${USAGE}`
 if (p.blockers && p.blockers.length) return `blocked: ${wp} cannot start:\n${list(p.blockers)}`
+if (dupes(p.overlaps).length) return `blocked: ${wp} is already in flight elsewhere; coordinate with its owner (engineering-practices peer-coordination) before starting:\n${list(dupes(p.overlaps).map(said))}`
+const caveats = [].concat(p.caveats || []).map(String)
+const near = shared(p.overlaps).map(said)
+if (near.length) log(`work touching the same files: ${near.join('; ')}`)
+const nearNote = near.length ? `\nOther work in flight touches the same files: ${near.join('; ')}. Before changing those files, message each owner (engineering-practices peer-coordination) and keep your edit small so the later PR can merge the earlier one in cleanly.` : ''
 const owned = (p.owned_paths || []).join(', ') || '(none listed)'
 const docsPlan = (p.docs || []).map((d) => `${d.kind}: ${d.page} (${d.why})`)
 
@@ -227,7 +258,7 @@ Do only these missing steps (none means change no files):
 ${list(gap)}
 Done when: ${p.done_when}
 ${existing} Fetch it; if it is behind the default branch, merge the default branch in first. Commit with Conventional Commits, run the project's build and tests, push, and reuse its open PR or open a draft PR titled as a Conventional Commit with "Refs: ${wp}" in the body.
-Return the PR URL, whether tests pass, and the non-original items added.` : 
+Return the PR URL, whether tests pass, and the non-original items added.${nearNote}` : 
   `Implement ${wp} on branch ${p.branch}, writing only in: ${owned}.
 Follow the engineering-practices skills git-workflow, work-packages, provenance and peer-coordination, and the job-function plugin for this package's role.
 Steps:
@@ -237,7 +268,7 @@ Done when: ${p.done_when}
 License every new file under the project's license with its header rule, never a template default; log every non-original item in the provenance log.
 ${existing ? `${existing} Fetch it and build on the work already there; if it is behind the default branch, merge the default branch in first.` : `Cut ${p.branch} from the latest remote default branch.`}
 Commit with Conventional Commits, run the project's build and tests, push to ${p.branch}, and ${existing ? 'reuse its open PR (open a draft PR only if none exists), making sure the title is a Conventional Commit, with' : 'open a draft PR titled as a Conventional Commit with'} "Refs: ${wp}" in the body.
-Return the PR URL, whether tests pass, and the non-original items added.`,
+Return the PR URL, whether tests pass, and the non-original items added.${nearNote}`,
     { schema: BUILD, phase: 'Build', label: 'build' },
   )
 if (prior && b && b.pr_url && !gap.length && prBranch.pr) log(`build reused from ${priorFrom}: ${b.pr_url}`)
@@ -287,9 +318,9 @@ if (!reviewed || open.length) {
 
 phase('Ship')
 const s = await agent(
-  `For ${wp} on ${p.branch}: confirm the build, tests and CI pass; update the package's status row in ${plan} within the PR (status "in review"); re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"); mark the PR ready and request the project's reviewer (the code-reviewer role, not the project owner). Follow engineering-practices git-workflow and peer-coordination.
+  `For ${wp} on ${p.branch}: confirm the build, tests and CI pass; ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
 Do not merge here: the author squash-merges after the reviewer passes it and CI is green.
-Return the PR URL, CI state, and the dependant packages to notify with the PR link once merged.`,
+${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), and the dependant packages to notify with the PR link once merged.`,
   { schema: SHIP, phase: 'Ship', label: 'ship' },
 )
 if (!s) return `blocked: ship step for ${wp} failed (agent returned nothing); PR ${b.pr_url || 'on ' + p.branch} is reviewed but not marked ready`
@@ -300,7 +331,11 @@ return {
   docs: d ? d.pages : ['unverified: docs agent returned nothing'],
   ...(prior ? { prior: priorFrom } : {}),
   undocumented: d ? d.undocumented || [] : [],
+  status: s.status_set || p.ship_status,
+  caveats,
+  overlaps: near,
   dependants: s.dependants || [],
-  next: `after the code reviewer passes, run /engineering-practices:land-pr { pr: "${s.pr_url}" } (keeps the branch current, polls CI itself and squash-merges), then tell each dependant`,
+  land: { pr: s.pr_url, row: `${plan}: ${wp}`, notify: [...(s.dependants || []).map((x) => `${x} (dependant)`), 'the coordinator or whoever assigned this package'] },
+  next: `after the code reviewer passes, run /engineering-practices:land-pr with the land object as args: it keeps the branch current, polls CI, squash-merges, confirms the ${wp} row reads merged on the default branch and tells each dependant and the assigner`,
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)

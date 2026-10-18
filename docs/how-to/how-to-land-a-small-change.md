@@ -21,13 +21,23 @@ squash-merged commit on the default branch.
    /engineering-practices:small-change {"change": "bump the formatter to 3.4.2 to pick up the CRLF fix", "type": "build"}
    ```
 
+   To put the change on a PR that is already open (yours, or one you
+   may push to) instead of opening a new one, add its number:
+
+   ```
+   /engineering-practices:small-change {"change": "fix the broken link in the index", "pr": "42"}
+   ```
+
 2. If it returns `not small: ...`, use the work-package route instead.
+   If it returns `blocked: this change is already in flight elsewhere`,
+   talk to the owner of the listed PR or session instead.
 
 3. If it returns `blocked: local check failed ...`, fix the check on the
    branch, or drop the change if the check also fails on the default
    branch and report that separately.
 
-4. If it returns `ready: false`, the PR is still draft: poll CI yourself
+4. If it returns `ready: false`, the PR is still draft: check CI yourself
+   (schedule a check-in every 5 minutes; do not sleep in the shell)
    until it is green, then mark the PR ready and ask the reviewer by
    hand. Do not run open mode again; it would cut a second branch.
 
@@ -60,7 +70,7 @@ squash-merged commit on the default branch.
 Follow the same order by hand with the
 [git-workflow skill](../reference/skill-git-workflow.md): branch from the
 latest remote default branch, edit, run the local check, commit, draft
-PR, poll CI with `gh pr checks <pr> --watch --fail-fast`, ask the
+PR, check CI with `gh pr checks <pr>` at scheduled check-ins, ask the
 reviewer, update the branch, squash-merge.
 
 See the [small-change reference](../reference/workflow-small-change.md)

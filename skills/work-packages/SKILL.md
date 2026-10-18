@@ -21,7 +21,7 @@ Each row in the plan carries:
 | Owned paths | Where this package may write |
 | Depends on | Packages or contracts it needs |
 | Done when | One testable sentence: what is true when it is finished |
-| Status | `planned`, `in progress`, `in review`, `merged`, `blocked` |
+| Status | The plan's own values, from its status legend (for example `planned`, `in progress`, `in review`, `merged`, `blocked`); workflows read them, never assume them |
 
 A row without a testable done-when is not ready; ask the coordinator
 (the project-manager role) to fix the row before starting.
@@ -30,16 +30,21 @@ A row without a testable done-when is not ready; ask the coordinator
 
 1. Onboard (`project-onboarding`), then read your row, the contracts it
    touches and its dependencies' status.
-2. Branch `wp/<id>-<slug>` from the latest default branch
-   (`git-workflow`). Set the row's status to `in progress` in your first
-   PR commit or tell the coordinator.
-3. **Dependencies not landed? Do not wait.** Build against the contract
+2. Check that nobody is already on it (`peer-coordination`, "Check for
+   overlapping work"). Same goal in flight: stop and talk to its owner.
+3. Branch `wp/<id>-<slug>` from the latest default branch
+   (`git-workflow`). Set the row's status to the plan's own value for
+   started work (read its status legend and earlier rows; never invent
+   one) in your first PR commit, or tell the coordinator.
+4. **Dependencies not landed? Do not wait.** Build against the contract
    with a stub, fake or placeholder that honours it, and list each stub
    in the PR. If the contract itself is missing or unclear, agree it
    with its owner first (`peer-coordination`).
-4. Plan the slices: the smallest sequence of PRs that each leaves the
+5. Plan the slices: the smallest sequence of PRs that each leaves the
    system working. If the package needs more than one PR, say so in the
-   first.
+   first. Risks that do not stop you (an assumption, a stub, a test you
+   cannot run here) are caveats: list them under "Known risks" in the
+   PR, never as blockers.
 
 ## Work
 
@@ -63,9 +68,10 @@ A row without a testable done-when is not ready; ask the coordinator
 - [ ] Docs for the work written in the project's docs, right Diataxis kind (`documentation`)
 - [ ] Provenance recorded for anything not original (`provenance`)
 - [ ] PR ready, title a Conventional Commit, body lists stubs, follow-ups, `Refs: WP-<id>`
-- [ ] Row status updated in the same PR
-- [ ] Reviewer passed it; you squash-merged it (`git-workflow`)
-- [ ] Each dependant told, with the PR link (`peer-coordination`)
+- [ ] Row status set in the same PR to the value it should have once merged (the plan's done value unless the project closes rows elsewhere), so the default branch is right at squash-merge
+- [ ] Reviewer passed it; you squash-merged it (`git-workflow`; `land-pr` with deliver-package's `land` args does this and the next two)
+- [ ] Row reads merged on the default branch after the merge
+- [ ] Each dependant and whoever assigned the package told, with the PR link (`peer-coordination`)
 
 ## Splitting work into packages (for whoever plans)
 

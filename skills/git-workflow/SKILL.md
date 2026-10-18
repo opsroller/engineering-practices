@@ -84,9 +84,13 @@ Message and type details: [commit-reference.md](commit-reference.md).
   Do not wait on the owner.
 - Check the squash message: the PR title as subject; body trimmed to the
   why plus footers (`Refs:`, `BREAKING CHANGE:`, co-author trailers).
-- **Check CI yourself.** Poll the checks on the PR's latest head commit
-  (for example `gh pr checks <pr> --watch --fail-fast`); never wait for a
-  notification to say CI finished or a review arrived.
+- **Check CI yourself.** Read the checks on the PR's latest head commit;
+  never wait for a notification to say CI finished or a review arrived.
+  While checks run, do not sleep in the shell: schedule a check-in for
+  5 minutes later (a send-later, wakeup or scheduled-task tool) and end
+  the turn, and never end a turn waiting without one. Only without such
+  a tool use one bounded watch (for example
+  `gh pr checks <pr> --watch --fail-fast`).
 - **Update right before merging**: bring the latest default branch in
   (rebase with `--force-with-lease` on a branch only you push to,
   otherwise merge it in), let CI run on the new head, then merge. This

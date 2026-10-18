@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'small-change',
-  description: 'Land one small chore-sized change (a config line, a dependency bump, a docs index fix) as a squash-merged Conventional Commit, in any role. Open: args { change: "<what to change and why>" (required), type: "<conventional type, optional>", scope: "<optional>" }. Merge after the reviewer passes: args { pr: "<number or URL>", merge: true }',
+  description: 'Land one small chore-sized change (a config line, a dependency bump, a docs index fix) as a squash-merged Conventional Commit, in any role. Open: args { change: "<what to change and why>" (required), type: "<conventional type, optional>", scope: "<optional>" }. Add to an existing PR instead of opening one: args { change, pr: "<number or URL>" }. Merge after the reviewer passes: args { pr: "<number or URL>", merge: true }',
   phases: [
-    { title: 'Scope', detail: 'confirm the change is small; otherwise stop and point to deliver-package' },
-    { title: 'Change', detail: 'branch off the latest default branch, make the minimal change, run the local check, commit, push, open a draft PR' },
+    { title: 'Scope', detail: 'check for overlapping work, confirm the change is small; otherwise stop and point to deliver-package' },
+    { title: 'Change', detail: 'branch off the latest default branch (or check out the given PR head), make the minimal change, run the local check, commit, push, open a draft PR or update the given one' },
     { title: 'Check', detail: 'independent read of the diff, one fix round at most' },
     { title: 'Hand off', detail: 'poll CI yourself until it settles, mark ready, ask the reviewer' },
     { title: 'Merge', detail: 'bring the default branch in right before merging, re-check CI, squash-merge, delete the branch' },
@@ -92,7 +92,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     if (value === '__run_halted__') {
       return {
         run: 'inline', status: 'next', next, results: out, reviewers: by, self_reviewed, skipped, logs,
-        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done".',
+        how: 'Do each brief in next, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief marked independent reviews work this run produced, so do not answer it yourself: send its prompt to a reviewer with no part in the work (the project\'s code-reviewer role, a fresh session or a fresh subagent), use their answer, and name them in run.reviewers under its key; if you must answer it yourself, it is listed in self_reviewed and must be reported as self-reviewed. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args, run.results set to the merged results and run.reviewers to the merged reviewers. Repeat until status is "done". To avoid pasting results back on every call, drive the run with engineering-practices tools/run-inline.mjs and a state file instead: it stores each answer and prints only the next briefs.',
       }
     }
     return { run: mode, status: 'done', result: value, results: out, reviewers: by, self_reviewed, skipped, logs }
@@ -103,14 +103,25 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: small-change { change: "<what to change and why>", type: "<optional>", scope: "<optional>" } to open; small-change { pr: "<number or URL>", merge: true } to merge once the reviewer has passed it'
+const USAGE = 'usage: small-change { change: "<what to change and why>", type: "<optional>", scope: "<optional>" } to open; small-change { change: "...", pr: "<number or URL>" } to add it to that PR; small-change { pr: "<number or URL>", merge: true } to merge once the reviewer has passed it'
 if (!args || (!args.change && !(args.pr && args.merge))) return USAGE
 
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
+// A review request on the hosting service reaches only an account; an agent
+// reviewer, or one sharing the author's account, is reached by message.
+const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
+const WAIT = 'schedule a check-in for 5 minutes from now (a send-later, wakeup or scheduled-task tool) and never end your turn waiting without one'
+// Two sessions doing the same work is the costliest waste there is, so
+// every workflow that starts work first looks for work already in flight.
+const OVERLAP = (self) => `Before planning, look for overlapping work in flight${self ? ` (other than ${self})` : ''}: the repository's open pull requests and recently pushed branches, the plan's status rows, and, where your tools can list them, other running sessions, threads or assignees and what they are on (read them; do not ask). Return overlaps: each item that shares this work's goal (kind "duplicate") or changes the same files, package or contract (kind "same-files"), with a link and its owner. Return an empty list if you find none.`
+const OVERLAPS = { type: 'array', items: { type: 'object', properties: { kind: { type: 'string', enum: ['duplicate', 'same-files'] }, what: { type: 'string' }, link: { type: 'string' }, owner: { type: 'string' } }, required: ['kind', 'what'] } }
+const dupes = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'duplicate') : [])
+const shared = (xs) => (Array.isArray(xs) ? xs.filter((o) => o && o.kind === 'same-files') : [])
+const said = (o) => `${o.what}${o.link ? ` (${o.link})` : ''}${o.owner ? `, owner ${o.owner}` : ''}`
 
-// Notifications about CI and reviews are not reliable; every CI wait in this
-// workflow is a bounded poll the agent runs itself.
-const CI_POLL = `Check CI yourself; never wait for a notification or webhook to tell you it finished. Read the check runs and commit statuses for the PR's current head commit (for example \`gh pr checks <pr> --watch --fail-fast\`, or the hosting service's checks API or tool), polling every 30 to 60 seconds for up to 20 minutes. Make sure the result belongs to the latest head SHA, not an earlier push. Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>", "pending: <checks still running>" (timed out), or "none" (the repository runs no CI on PRs). On red, read the failing log before you report.`
+// Notifications about CI and reviews are not reliable, and shell sleeps may
+// be blocked, so a CI wait is a scheduled check-in, then a re-run.
+const CI_POLL = `Check CI yourself; never wait for a notification or webhook to say it finished. Read the check runs and commit statuses for the PR's current head SHA (the hosting service's checks API or tool, or \`gh pr checks <pr>\`) and make sure the result belongs to that SHA, not an earlier push. Never wait in the shell with sleep loops. If checks are still running and your session can schedule a check-in for itself (a send-later, wakeup or scheduled-task tool), report pending now: the caller schedules a check-in in 5 minutes and runs the workflow again. Only without such a tool, and only where the shell allows a long command, use one bounded blocking watch (for example \`gh pr checks <pr> --watch --fail-fast\`, up to 20 minutes). Report exactly one of: "green" (every required check passed), "red: <check> <one-line cause>" (read the failing log first), "pending: <checks still running>", or "none" (the repository runs no CI on PRs).`
 
 const SCOPE = {
   type: 'object',
@@ -122,8 +133,9 @@ const SCOPE = {
     title: { type: 'string' },
     files: { type: 'array', items: { type: 'string' } },
     local_check: { type: 'string' },
+    overlaps: OVERLAPS,
   },
-  required: ['small', 'default_branch', 'branch', 'title', 'local_check'],
+  required: ['small', 'default_branch', 'branch', 'title', 'local_check', 'overlaps'],
 }
 const CHANGE = {
   type: 'object',
@@ -180,32 +192,41 @@ Return whether it merged, the squash commit SHA, the final CI state, and the rea
     { schema: MERGE, phase: 'Merge', label: 'merge' },
   )
   if (!m) return `blocked: merge step for ${pr} failed (agent returned nothing); check the PR state before retrying`
+  if (!m.merged && /^pending/.test(m.ci || '')) return `waiting: CI on ${pr} is still running (${m.ci}); ${WAIT}, then run merge mode again`
   if (!m.merged) return `not merged: ${pr}: ${m.reason || 'no reason given'} (CI: ${m.ci || 'unknown'})`
   return { pr, merged: true, squash_sha: m.squash_sha, ci: m.ci, next: 'tell whoever asked for the change, and any dependant, with the PR link' }
 }
 
 const change = String(args.change)
+// With pr (and no merge), the change rides on that PR's head branch: a
+// follow-up the reviewer asked for, or a fix found before landing.
+const onto = args.pr ? String(args.pr) : ''
 const typeHint = args.type ? `Use the Conventional Commit type "${args.type}"${args.scope ? ` with scope "${args.scope}"` : ''}.` : 'Pick the Conventional Commit type from the engineering-practices commit reference (often chore, build, ci, docs or fix for changes this size).'
 
 phase('Scope')
 const s = await agent(
   `A small change is wanted: "${change}".
 Follow the engineering-practices skills project-onboarding (just enough: CLAUDE.md, the project profile, contributing rules) and git-workflow. Do not edit anything yet.
-Decide whether this is a small change: one concern, a handful of lines in a few files, no new behaviour a user or another role would notice, no change to a shared contract or public interface, nothing that needs new tests or a new doc page beyond a one-line fix. A dependency bump counts only if it needs no code changes to adapt. If it is not small, return small: false with why_not.
-Otherwise return: the default branch name (read it from the remote, do not assume "main"); a branch name per the profile, else <type>/<slug>; the PR title as a valid Conventional Commit line; the files you expect to touch; and the fastest local check that proves the change sound (the project's lint, format, build, test or validator command for those files; for a docs index, a link check or the docs build). ${typeHint}`,
+${OVERLAP(onto)}
+${onto ? `The change goes onto the existing pull request ${onto}: read it, confirm it is open and that you can push to its head branch (your assigned branch, or the profile lets you). If not, return small: false with why_not.
+` : ''}Decide whether this is a small change: one concern, a handful of lines in a few files, no new behaviour a user or another role would notice, no change to a shared contract or public interface, nothing that needs new tests or a new doc page beyond a one-line fix. A dependency bump counts only if it needs no code changes to adapt. If it is not small, return small: false with why_not.
+Otherwise return: the default branch name (read it from the remote, do not assume "main"); ${onto ? `the PR's head branch as branch; the commit subject for this change as title (a valid Conventional Commit line)` : 'a branch name per the profile, else <type>/<slug>; the PR title as a valid Conventional Commit line'}; the files you expect to touch; and the fastest local check that proves the change sound (the project's lint, format, build, test or validator command for those files; for a docs index, a link check or the docs build). ${typeHint}`,
   { schema: SCOPE, phase: 'Scope', label: 'scope' },
 )
 if (!s) return `blocked: scoping failed (agent returned nothing). ${USAGE}`
 if (!s.small) return `not small: ${s.why_not || 'no reason given'}. Use /engineering-practices:deliver-package (or a work package) instead.`
+if (dupes(s.overlaps).length) return `blocked: this change is already in flight elsewhere; coordinate with its owner (engineering-practices peer-coordination) instead of opening a second PR:\n${list(dupes(s.overlaps).map(said))}`
+const near = shared(s.overlaps).map(said)
+if (near.length) log(`work touching the same files: ${near.join('; ')}`)
 
 phase('Change')
 const c = await agent(
   `Make this small change: "${change}".
-1. Fetch, then cut branch ${s.branch} from the latest ${s.default_branch} on the remote (not a stale local copy). Never commit to ${s.default_branch} directly.
+1. ${onto ? `Fetch, then check out ${s.branch}, the head branch of ${onto}, at its remote tip; if others push to it, pull their commits first. Do not cut a new branch or open a new PR.` : `Fetch, then cut branch ${s.branch} from the latest ${s.default_branch} on the remote (not a stale local copy).`} Never commit to ${s.default_branch} directly.${near.length ? ` Other work in flight touches the same files (${near.join('; ')}): tell each owner (engineering-practices peer-coordination) and keep the edit small.` : ''}
 2. Make the minimal edit, expected in: ${(s.files || []).join(', ') || 'the files the change needs'}. Touch nothing else: no drive-by reformatting, renames or unrelated fixes. Keep every license header the project requires on new files (engineering-practices provenance skill). If a dependency bump changes a lockfile, regenerate it with the project's tool.
 3. Run the local check: ${s.local_check}. If it fails because of your change, fix it; if it fails on ${s.default_branch} too, note that and do not widen the change to fix it.
 4. Commit as "${s.title}" (Conventional Commits 1.0.0), with a body saying why if the subject does not, and any footers the project requires.
-5. Push and open a draft PR with that title. Description: what changed and why in two or three sentences, the local check you ran and its result, anything left out. Include any attribution or template the project requires.
+5. ${onto ? `Push to ${s.branch}. Add a line on this change to the description of ${onto}, keeping its title unless the change alters what the PR does, and any attribution or template it carries.` : 'Push and open a draft PR with that title. Description: what changed and why in two or three sentences, the local check you ran and its result, anything left out. Include any attribution or template the project requires.'}
 Return the PR URL, head SHA, whether the local check passed, the check's last lines of output, and the number of changed lines.`,
   { schema: CHANGE, phase: 'Change', label: 'change' },
 )
@@ -213,8 +234,8 @@ if (!c) return `blocked: change step failed (agent returned nothing); branch ${s
 if (!c.check_passed) return `blocked: local check failed on ${s.branch}:\n${c.check_output || '(no output)'}\nPR: ${c.pr_url || '(not opened)'}`
 
 phase('Check')
-const reviewPrompt = `Act as an independent reviewer of the draft PR ${c.pr_url || 'on ' + s.branch} for "${change}". Do not edit anything.
-Read the whole diff. Check: it does only what was asked and nothing else; it is still small (one concern, no behaviour or contract change); the title is a valid Conventional Commit of the right type; license headers are present where the project requires them; lockfiles or generated files were regenerated by tooling, not hand-edited; docs that reference what changed (an index, a version, a path) still match.
+const reviewPrompt = `Act as an independent reviewer of ${onto ? `the change "${change}" added to PR ${onto}` : `the draft PR ${c.pr_url || 'on ' + s.branch} for "${change}"`}. Do not edit anything.
+${onto ? `Read the commits this change added (up to head ${c.head_sha || 'the current head'}), then the whole PR diff for anything they break.` : 'Read the whole diff.'} Check: it does only what was asked and nothing else; it is still small (one concern, no behaviour or contract change); the title is a valid Conventional Commit of the right type; license headers are present where the project requires them; lockfiles or generated files were regenerated by tooling, not hand-edited; docs that reference what changed (an index, a version, a path) still match.
 List blocking problems only where you can point to a realistic failure or a broken rule; list other suggestions separately.`
 let r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 'review', independent: true })
 if (!r) return `blocked: review of ${c.pr_url || s.branch} returned nothing; the PR is unverified and stays draft`
@@ -233,10 +254,10 @@ ${list(r.blocking)}`,
 
 phase('Hand off')
 const h = await agent(
-  `Hand off the draft PR ${c.pr_url || 'on ' + s.branch} for review.
+  `Hand off ${onto ? `PR ${onto}, with this change on its head,` : `the draft PR ${c.pr_url || 'on ' + s.branch}`} for review.${onto ? ' Any pass the reviewer gave an earlier head no longer counts: ask again with the new head SHA and one line on what this change added.' : ''}
 1. ${CI_POLL}
 2. If CI is "red" because of this change, fix it on the branch (smallest edit, local check, Conventional Commit, push) and poll again; at most two fix attempts. If it is red on ${s.default_branch} too, say so and do not widen the PR.
-3. When CI is "green" or "none", re-read the title and description against the final diff, mark the PR ready for review, and ask the project's reviewer (the code-reviewer role, or the peer the profile names) to review it, with the PR link and one line on what changed. Never ask the project owner to review unless the profile says so. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
+3. When CI is "green" or "none", re-read the title and description against the final diff, mark the PR ready for review, and ${REVIEWER}. If CI is still "pending" or "red", leave the PR as draft and say what is outstanding.
 Follow engineering-practices git-workflow and peer-coordination. Do not merge here.
 Return the PR URL, the CI state, whether the PR is ready, and who was asked to review.`,
   { schema: HANDOFF, phase: 'Hand off', label: 'handoff' },
@@ -250,6 +271,6 @@ return {
   notes: (r.other || []).length ? r.other : [],
   next: h.ready
     ? `when the reviewer passes it, run /engineering-practices:small-change { pr: "${h.pr_url || c.pr_url}", merge: true } (it brings ${s.default_branch} in, re-checks CI itself and squash-merges)`
-    : `the PR is still draft: poll CI on ${h.pr_url || c.pr_url} yourself until it is green (fix it if red), then mark it ready and ask the reviewer by hand (engineering-practices git-workflow); do not re-run open mode, which would cut a second branch`,
+    : `the PR is still draft: check CI on ${h.pr_url || c.pr_url} yourself (${WAIT}) until it is green, fixing it if red, then mark it ready and ask the reviewer by hand (engineering-practices git-workflow); do not re-run open mode, which would cut a second branch`,
 }
 })(RUN.agent, RUN.phase, RUN.log)]); return RUN.finish(RUN_OUT)
