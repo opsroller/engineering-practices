@@ -78,10 +78,11 @@ if (args.pr && args.merge) {
   phase('Merge')
   const m = await agent(
     `Squash-merge pull request ${pr}, following the engineering-practices git-workflow skill (section 5, Merge).
-1. Read the PR: confirm the project's reviewer (the code-reviewer role, or the peer the profile names; never the project owner) has passed its current head, and every review comment is answered. If not, do not merge; return merged: false with the reason.
-2. Right before merging, bring the latest default branch into the PR branch so it is tested against what it will land on: fetch, then rebase onto the default branch (push with --force-with-lease, which refuses to overwrite commits you have not seen) on a branch only you push to, or merge the default branch in if the profile says so or others push to it. Resolve any conflict with the smallest edit that keeps both sides; regenerate lockfiles and generated files with the project's tooling, never by hand. Skip the push if the branch already contains the default branch's tip.
+1. Read the PR. Do not merge, and return merged: false with the reason, if it is still a draft, if any review comment is unanswered, or if the project's reviewer (the code-reviewer role, or the peer the profile names; never the project owner) has not passed its current head. What counts as a pass follows the project's review convention in the profile: an approval, or a pass comment or comment review where reviewer and author share an account.
+2. Right before merging, bring the latest default branch into the PR branch so it is tested against what it will land on: fetch, then rebase onto the default branch (push with --force-with-lease, which refuses to overwrite commits you have not seen) on a branch only you push to, or merge the default branch in if the profile says so or others push to it. Skip the push if the branch already contains the default branch's tip.
+   If the update conflicts, or needs a lockfile or generated file regenerated, the result is new code the reviewer never saw: resolve it with the smallest edit that keeps both sides (regenerate with the project's tooling, never by hand), run the local check, push, poll CI as in step 3, ask the reviewer to look again with the new head SHA and the files you resolved, and return merged: false with the reason "updated with conflict resolution; needs the reviewer's pass on <new head SHA>". Do not merge in this run.
 3. Re-run the project's local check for the touched files. If you pushed, CI runs again: ${CI_POLL}
-4. Merge only if CI is "green" or "none" and the branch is current. If the default branch moved again while you waited, repeat steps 2 and 3 once more; if it keeps moving, stop and return the reason.
+4. Merge only if CI is "green" or "none", the branch is current, and the update in step 2 was conflict-free. If the default branch moved again while you waited, repeat steps 2 and 3 once more (the conflict rule still applies); if it keeps moving, stop and return the reason.
 5. Squash-merge with the PR title as the subject (a valid Conventional Commit) and a body trimmed to the why plus footers (Refs:, BREAKING CHANGE:, co-author trailers). Use squash, never a merge commit or rebase-merge. Delete the branch.
 Return whether it merged, the squash commit SHA, the final CI state, and the reason if it did not merge.`,
     { schema: MERGE, phase: 'Merge', label: 'merge' },
@@ -126,11 +127,12 @@ List blocking problems only where you can point to a realistic failure or a brok
 let r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 'review' })
 if (!r) return `blocked: review of ${c.pr_url || s.branch} returned nothing; the PR is unverified and stays draft`
 if ((r.blocking || []).length) {
-  await agent(
+  const fixed = await agent(
     `Fix these review findings on ${s.branch} (PR ${c.pr_url || 'open for this branch'}) with the smallest edit, re-run the local check (${s.local_check}), commit (Conventional Commits) and push:
 ${list(r.blocking)}`,
     { phase: 'Check', label: 'fix' },
   )
+  if (!fixed) log('fix agent returned nothing; re-reviewing the branch as it stands')
   r = await agent(reviewPrompt, { schema: REVIEW, phase: 'Check', label: 're-review' })
   if (!r || (r.blocking || []).length) {
     return `blocked: ${c.pr_url || s.branch} still has open items after one fix round:\n${list(r ? r.blocking : ['re-review returned nothing'])}\nA change that needs more than one round is probably not small; consider deliver-package.`
@@ -156,5 +158,5 @@ return {
   notes: (r.other || []).length ? r.other : [],
   next: h.ready
     ? `when the reviewer passes it, run /engineering-practices:small-change { pr: "${h.pr_url || c.pr_url}", merge: true } (it brings ${s.default_branch} in, re-checks CI itself and squash-merges)`
-    : 'fix what is outstanding, then run the hand-off again or mark the PR ready by hand once CI is green',
+    : `the PR is still draft: poll CI on ${h.pr_url || c.pr_url} yourself until it is green (fix it if red), then mark it ready and ask the reviewer by hand (engineering-practices git-workflow); do not re-run open mode, which would cut a second branch`,
 }
