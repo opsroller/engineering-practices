@@ -13,7 +13,9 @@ This guide shows you how to make that edit without surprising its owner.
    (`work-packages`, stubs).
 4. Otherwise, write the edit down in one line. If you cannot, it is too
    big: ask the owner to make it, and stop here.
-5. Make only that edit, in its own commit. Use a Conventional Commit
+5. Make only that edit, in its own commit. If the project squash-merges
+   and the edit must stay revertible on its own, open it as its own
+   small PR instead and land it first. Use a Conventional Commit
    whose scope names the owner's area, for example
    `build(engine): register the asset check test target`.
 6. Add a section to the PR description:
@@ -35,7 +37,9 @@ This guide shows you how to make that edit without surprising its owner.
    ```
 
 8. Merge only when review has passed and the owner has not objected. If
-   they object, remove the commit or ask the coordinator to decide.
+   they object, remove the commit or ask the coordinator to decide. If
+   they have not answered by then, merge and leave your message standing;
+   they can still ask for a revert.
 
 See the [peer-coordination skill reference](../reference/skill-peer-coordination.md)
 and [how to change a shared contract](how-to-change-a-shared-contract.md)

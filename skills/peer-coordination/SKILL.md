@@ -61,7 +61,10 @@ breaking the change in two, make the edit yourself, under these rules:
    cannot describe the edit in one line, it is not minimal; ask the
    owner to do it.
 2. **Separate commit.** Put each cross-role edit in its own commit, so
-   the owner can read or revert it alone.
+   the owner can review it alone. Where the project squash-merges, that
+   commit exists only during review: after the merge the owner reverts
+   those lines by hand. If the edit must be revertible on its own, land
+   it as its own small PR first.
 3. **Flagged in the PR.** Add a "Cross-role edits" section to the PR
    description: path, owner, what changed, and why it could not live in
    your paths.
@@ -70,7 +73,9 @@ breaking the change in two, make the edit yourself, under these rules:
    supports code owners, their review is requested automatically; still
    send the message.
 5. **Objections stop the merge.** If the owner objects, take the edit
-   out or ask the coordinator to decide; do not merge over it.
+   out or ask the coordinator to decide; do not merge over it. If the
+   owner has not answered by the time review passes, merge and leave the
+   notice standing; they can still ask for a revert.
 
 Never use this for contracts (use expand, migrate, contract below), for
 work that belongs in the owner's package, or to fix their bug: report

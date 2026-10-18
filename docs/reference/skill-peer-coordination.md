@@ -26,10 +26,10 @@ From and to packages, Need, Why, Meanwhile, Link.
 | Rule | Meaning |
 |---|---|
 | Minimal | only the lines the change needs; describable in one line |
-| Separate commit | one commit per cross-role edit |
+| Separate commit | one commit per cross-role edit; after a squash merge the owner reverts by hand, or land it as its own PR first |
 | Flagged | "Cross-role edits" section in the PR: path, owner, what, why |
 | Owner notified | direct message with the list and PR link before merge |
-| Objection stops merge | remove the edit or ask the coordinator |
+| Objection stops merge | remove the edit or ask the coordinator; no answer by review pass: merge, notice stands |
 
 Not for contracts, the owner's own work, or fixing their bugs.
 
