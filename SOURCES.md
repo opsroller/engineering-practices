@@ -29,3 +29,4 @@ Reference: the research behind this plugin, for maintainers checking where a rul
 | Git documentation: git merge, union and merge strategies | https://git-scm.com/docs/git-merge | Merging the default branch in without rewriting pushed commits; conflict resolution (`land-pr`) |
 | Git documentation: gitattributes, `merge=union` | https://git-scm.com/docs/gitattributes | Union merge keeps both sides' lines, the model for shared-list conflicts (`land-pr`) |
 | Run modes (`workflow-run-modes`, `tools/`) | none | Project tooling, not research: built on the workflow runtime's own `agent()`, `phase()` and `args` contract, so no external source applies |
+| Martin Fowler: Deployment Pipeline | https://martinfowler.com/bliki/DeploymentPipeline.html | Build once and promote the same build through later stages instead of rebuilding (`deliver-package` `prior` handoff) |

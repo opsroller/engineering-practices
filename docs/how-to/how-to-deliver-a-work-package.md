@@ -22,6 +22,14 @@ squash commit.
    started, add `"branch": "<name>"` or `"pr": "<number>"` to work there
    instead of a new `wp/` branch.
 
+   If a role workflow already built and tested the package (it returns
+   a `handoff`), pass its result as `"prior"` so the workflow ships it
+   without building it again:
+
+   ```
+   /engineering-practices:deliver-package {"wp": "WP-07", "prior": <the role workflow's result>}
+   ```
+
    If your session cannot afford its subagents, add
    `"run": {"mode": "inline"}` and do each step it hands back yourself
    (see [how to run a workflow inline](how-to-run-a-workflow-inline.md)).

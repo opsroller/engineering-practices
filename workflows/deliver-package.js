@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 export const meta = {
   name: 'deliver-package',
-  description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>" }',
+  description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>", prior: "<handoff object or full result of a role workflow that already built the work, optional>" }',
   phases: [
     { title: 'Plan', detail: 'onboard, read the package and contracts, plan slices, stubs and affected Diataxis doc kinds' },
-    { title: 'Build', detail: 'implement on the package branch with provenance recorded' },
-    { title: 'Document', detail: 'write or update the planned Diataxis pages in the same PR' },
+    { title: 'Build', detail: 'implement on the package branch with provenance recorded; with prior, only what the prior work left out' },
+    { title: 'Document', detail: 'write or update the planned Diataxis pages in the same PR; skipped when prior already wrote them' },
     { title: 'Check', detail: 'independent review of change and docs, fix loop (max 3 rounds)' },
     { title: 'Ship', detail: 'PR ready for the code reviewer, plan row updated, dependants listed' },
   ],
@@ -88,19 +88,42 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v1 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>" }'
+const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: "<handoff from a role workflow, optional>" }'
 if (!args || !args.wp) return USAGE
 const wp = String(args.wp)
 const plan = args.plan ? String(args.plan) : "the project's work-package plan (path in CLAUDE.md or the project profile)"
 
+// A role workflow that already built and tested the work hands it over as
+// a handoff object (its result's `handoff` field, or the object itself),
+// so Build and Document reuse it instead of building again. Spec:
+// docs/reference/workflow-deliver-package.md, "The prior arg".
+const unwrap = (o) => {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null
+  if (o.result && typeof o.result === 'object') return unwrap(o.result)
+  if (o.handoff && typeof o.handoff === 'object') return o.handoff
+  return o
+}
+const prior = args.prior === undefined || args.prior === null ? null : unwrap(args.prior)
+if (args.prior !== undefined && args.prior !== null) {
+  if (!prior) return `blocked: prior must be a handoff object or a role workflow result carrying one. ${USAGE}`
+  if (!prior.branch && !prior.pr) return 'blocked: prior names no branch or pr, so there is no built work to ship'
+  if (prior.tests_pass !== true) return `blocked: prior work from ${prior.from || 'the role workflow'} does not report tests_pass: true; finish it there first`
+}
+const priorFrom = prior ? String(prior.from || 'a role workflow') : ''
+const priorDocs = prior && Array.isArray(prior.docs) ? prior.docs.map(String) : []
+
 // Some agents may push only to a branch they were assigned, or pick up a
 // package someone already started; then the workflow reuses that branch
 // or PR instead of cutting wp/<id>-<slug>.
-const existing = args.pr
-  ? `Use the existing PR ${args.pr} and its head branch; do not create a new branch or PR.`
-  : args.branch
-    ? `Use the existing branch ${args.branch} (reuse its open PR if one exists); do not create a new branch.`
+const prBranch = { pr: args.pr || (prior && prior.pr), branch: args.branch || (prior && prior.branch) }
+const existing = prBranch.pr
+  ? `Use the existing PR ${prBranch.pr} and its head branch; do not create a new branch or PR.`
+  : prBranch.branch
+    ? `Use the existing branch ${prBranch.branch} (reuse its open PR if one exists); do not create a new branch.`
     : ''
+const built = prior
+  ? `The work for ${wp} is already built and tested on that branch by ${priorFrom}${priorDocs.length ? `, with docs pages ${priorDocs.join(', ')}` : ''}${prior.notes && prior.notes.length ? `; its notes: ${[].concat(prior.notes).join('; ')}` : ''}. Do not rebuild it.`
+  : ''
 const list = (xs) => (xs && xs.length ? '- ' + xs.join('\n- ') : '- none')
 
 const PLAN = {
@@ -169,6 +192,7 @@ const p = await agent(
   `Follow the engineering-practices skills project-onboarding, work-packages and documentation for ${wp} in ${plan}.
 Read CLAUDE.md, the project profile, the package row and every contract it touches; run the baseline build and tests.
 ${existing ? existing + ' Return that branch name, after confirming you can push to it and reading any work already on it.' : ''}
+${built ? built + ' Compare it with the package row and list under steps only what the row still needs that the branch lacks (often nothing), and under docs only pages still missing.' : ''}
 Return: the branch name (${existing ? 'the existing one' : 'wp/<id>-<slug>'}), owned paths, implementation steps as small slices, dependencies to stub against their contracts, the done-when line, the project's docs layout, and the Diataxis plan: for each thing the package will produce, use the compass (action/cognition x study/work) and the documentation skill's "what each kind of work owes" table to list the doc kind, the page to add or update, and why.
 List anything that prevents starting (missing row, no testable done-when, missing contract) under blockers. Do not write code yet.`,
   { schema: PLAN, phase: 'Plan', label: 'plan' },
@@ -179,7 +203,16 @@ const owned = (p.owned_paths || []).join(', ') || '(none listed)'
 const docsPlan = (p.docs || []).map((d) => `${d.kind}: ${d.page} (${d.why})`)
 
 phase('Build')
-const b = await agent(
+const gap = prior ? p.steps || [] : []
+const b = prior && prBranch.pr && !gap.length
+  ? { pr_url: String(prBranch.pr), tests_pass: true, non_original: [].concat(prior.non_original || []) }
+  : await agent(prior ? `${built} Complete ${wp} on branch ${p.branch}, writing only in: ${owned}.
+Follow the engineering-practices skills git-workflow, provenance and peer-coordination.
+Do only these missing steps (none means change no files):
+${list(gap)}
+Done when: ${p.done_when}
+${existing} Fetch it; if it is behind the default branch, merge the default branch in first. Commit with Conventional Commits, run the project's build and tests, push, and reuse its open PR or open a draft PR titled as a Conventional Commit with "Refs: ${wp}" in the body.
+Return the PR URL, whether tests pass, and the non-original items added.` : 
   `Implement ${wp} on branch ${p.branch}, writing only in: ${owned}.
 Follow the engineering-practices skills git-workflow, work-packages, provenance and peer-coordination, and the job-function plugin for this package's role.
 Steps:
@@ -190,19 +223,24 @@ License every new file under the project's license with its header rule, never a
 ${existing ? `${existing} Fetch it and build on the work already there; if it is behind the default branch, merge the default branch in first.` : `Cut ${p.branch} from the latest remote default branch.`}
 Commit with Conventional Commits, run the project's build and tests, push to ${p.branch}, and ${existing ? 'reuse its open PR (open a draft PR only if none exists), making sure the title is a Conventional Commit, with' : 'open a draft PR titled as a Conventional Commit with'} "Refs: ${wp}" in the body.
 Return the PR URL, whether tests pass, and the non-original items added.`,
-  { schema: BUILD, phase: 'Build', label: 'build' },
-)
+    { schema: BUILD, phase: 'Build', label: 'build' },
+  )
+if (prior && b && b.pr_url && !gap.length && prBranch.pr) log(`build reused from ${priorFrom}: ${b.pr_url}`)
 if (!b) return `blocked: build for ${wp} failed (agent returned nothing); branch ${p.branch} may hold partial work`
 
 phase('Document')
-const d = await agent(
+const missingDocs = (p.docs || []).length > 0
+const d = prior && priorDocs.length && !missingDocs
+  ? { pages: priorDocs, undocumented: [].concat(prior.undocumented || []) }
+  : await agent(
   `Follow the engineering-practices documentation skill for ${wp} on branch ${p.branch} (PR ${b.pr_url || 'open for this branch'}). Docs layout: ${p.docs_layout || 'see the project profile'}.
 Planned pages:
 ${list(docsPlan)}
 Classify every user-visible change in this work with the Diataxis compass (action/cognition x study/work). For each, update or add exactly one page of that kind under the project's docs layout (default docs/<kind>/), keep each page to one kind, title it by the project pattern, and link to the related pages of the other kinds. Run every command and step you write. Commit the pages to the same PR (Conventional Commits) and push; list them by kind in the PR body.
 Report pages touched and any change you left undocumented and why.`,
   { schema: DOCS, phase: 'Document', label: 'docs' },
-)
+  )
+if (prior && priorDocs.length && !missingDocs) log(`docs reused from ${priorFrom}: ${priorDocs.join(', ')}`)
 if (!d) log('docs agent returned nothing; the review will check docs from scratch')
 
 phase('Check')
@@ -244,6 +282,7 @@ return {
   pr: s.pr_url,
   ci: s.ci,
   docs: d ? d.pages : ['unverified: docs agent returned nothing'],
+  ...(prior ? { prior: priorFrom } : {}),
   undocumented: d ? d.undocumented || [] : [],
   dependants: s.dependants || [],
   next: `after the code reviewer passes, run /engineering-practices:land-pr { pr: "${s.pr_url}" } (keeps the branch current, polls CI itself and squash-merges), then tell each dependant`,
