@@ -5,7 +5,7 @@ Reference, for roles whose work touches another agent's.
 | Field | Value |
 |---|---|
 | File | `skills/peer-coordination/SKILL.md` |
-| Use when | Depending on, blocking or changing another agent's work; changing a contract; handing off |
+| Use when | Depending on, blocking or changing another agent's work; touching a path another role owns; changing a contract; handing off |
 
 ## Message routing
 
@@ -20,6 +20,18 @@ Reference, for roles whose work touches another agent's.
 ## Message shape
 
 From and to packages, Need, Why, Meanwhile, Link.
+
+## Cross-role edit rules
+
+| Rule | Meaning |
+|---|---|
+| Minimal | only the lines the change needs; describable in one line |
+| Separate commit | one commit per cross-role edit |
+| Flagged | "Cross-role edits" section in the PR: path, owner, what, why |
+| Owner notified | direct message with the list and PR link before merge |
+| Objection stops merge | remove the edit or ask the coordinator |
+
+Not for contracts, the owner's own work, or fixing their bugs.
 
 ## Contract change pattern
 
