@@ -34,12 +34,20 @@ so keys stay the same from one run to the next.
 |---|---|---|
 | `run` | always | `"agents"` or `"inline"` |
 | `status` | always | `"next"`: briefs wait for you (inline only); `"done"`: the workflow finished |
-| `next` | `status: "next"` | Briefs, in order: `{ key, phase, prompt, schema }`; `schema` is `null` for a free-text answer |
+| `next` | `status: "next"` | Briefs, in order: `{ key, phase, prompt, schema }`, plus `note` when an earlier answer to that brief was rejected; `schema` is `null` for a free-text answer |
 | `result` | `status: "done"` | The workflow's own return value |
 | `results` | always | Every answer used in this run, by key: pass it back to resume |
 | `skipped` | always | Keys of steps left out by `only` or `from` that had no stored answer |
 | `logs` | always | The workflow's progress messages |
 | `how` | `status: "next"` | One-paragraph reminder of how to drive the next step |
+
+## Answer checks
+
+A stored or inline answer is used only if it fits the step's schema the
+way the runtime checks an agent's answer: for an object schema it must be
+a JSON object carrying every `required` field. Otherwise, in inline mode
+the step comes back in `next` with `note: "answer missing <fields>; answer
+this brief again"`; in agents mode the step runs again.
 
 ## Step outside the selection
 
@@ -54,7 +62,7 @@ so keys stay the same from one run to the next.
 |---|---|
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
-| `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>'` runs the workflow with stub agents in every mode; fails on unlabelled or duplicate steps, on inline or resume results that differ from the multi-agent run, and on `only` running other phases |
+| `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on unlabelled or duplicate steps, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## Requirements on a workflow
 

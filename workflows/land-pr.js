@@ -24,6 +24,15 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     ? `run.mode must be "agents" or "inline", got "${c.mode}"`
     : unknown.length ? `run.from names no phase: ${unknown.join(', ')}. Phases: ${titles.join(', ')}` : null
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
+  // An answer must carry every required key of its schema, as the runtime
+  // enforces for agents; returns the missing keys, or null when it fits.
+  const missing = (v, schema) => {
+    if (v === null || v === undefined) return 'an answer'
+    if (!schema || schema.type !== 'object') return null
+    if (typeof v !== 'object' || Array.isArray(v)) return 'a JSON object'
+    const gap = (schema.required || []).filter((k) => !has(v, k) || v[k] === undefined)
+    return gap.length ? gap.join(', ') : null
+  }
   const seen = {}
   const out = {}
   const skipped = []
@@ -41,14 +50,21 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     const base = op.label || ph || 'agent'
     seen[base] = (seen[base] || 0) + 1
     const key = seen[base] > 1 ? `${base}#${seen[base]}` : base
-    if (has(results, key)) { out[key] = results[key]; return Promise.resolve(results[key]) }
+    let note = null
+    if (has(results, key)) {
+      const gap = missing(results[key], op.schema)
+      if (!gap) { out[key] = results[key]; return Promise.resolve(results[key]) }
+      note = `answer missing ${gap}; answer this brief again`
+    }
     if (!picked(ph, base)) { skipped.push(key); return Promise.resolve(null) }
     if (mode === 'agents') {
       return realAgent(prompt, opts).then((r) => { if (r !== null && r !== undefined) out[key] = r; return r })
     }
-    next.push({ key, phase: ph, prompt, schema: op.schema || null })
+    next.push(note ? { key, phase: ph, prompt, schema: op.schema || null, note } : { key, phase: ph, prompt, schema: op.schema || null })
     if (!halting) {
       halting = true
+      // Wait 200 microtask turns before pausing, so every sibling in a
+      // parallel() or pipeline() fan-out queues its brief into this pause.
       ;(async () => { for (let i = 0; i < 200; i++) await null; release('__run_halted__') })()
     }
     return new Promise(() => {})
@@ -60,7 +76,7 @@ const RUN = ((a, realAgent, realPhase, realLog) => {
     if (value === '__run_halted__') {
       return {
         run: 'inline', status: 'next', next, results: out, skipped, logs,
-        how: 'Do each brief in next yourself, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given. Add each answer to results under its key, then run this workflow again with the same args and run.results set to the merged results. Repeat until status is "done".',
+        how: 'Do each brief in next yourself, in order: follow its prompt in this session (it may tell you to edit files, commit or push), and shape your answer to its schema when one is given, with every required field. A brief with a note was answered before without the fields it names. Add each answer to results under its key, then run this workflow again with the same args and run.results set to the merged results. Repeat until status is "done".',
       }
     }
     return { run: mode, status: 'done', result: value, results: out, skipped, logs }

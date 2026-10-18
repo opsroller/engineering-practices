@@ -24,6 +24,7 @@ squash merge.
 ## Step labels
 
 For `run.only` and `run.results`: `adopt`, `sync:1` to `sync:3`, `review`, `merge`.
+Pass `results` only to resume the same run; a new land-pr run starts without them, because it re-reads the PR's current state.
 
 ## Conflict rules
 

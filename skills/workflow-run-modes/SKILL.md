@@ -41,7 +41,9 @@ an exact label, or a label prefix before `:` (`audit` matches `audit:ci`).
 3. Do each brief yourself, in order, in this session. Follow its prompt
    as written, including any edits, commits or pushes it asks for, and
    any skills it names. When it has a `schema`, your answer is a JSON
-   value matching it; when not, a short text answer.
+   value matching it, with every required field; when not, a short text
+   answer. A brief that comes back with a `note` was answered without the
+   fields the note names: answer it again in full.
 4. Merge your answers into `results` under each brief's `key`, keeping
    every result already there.
 5. Run the workflow again with the same args and
@@ -75,7 +77,10 @@ steps the chosen ones depend on. To redo a step, delete its key.
   engineering-practices repo; never edit a copy by hand.
 - Check the workflow offline with
   `node tools/check-workflow.mjs <workflow.js> '<args JSON>'`: it runs
-  every mode with stub agents and fails on missing or duplicate labels,
-  or when inline, resume or `only` diverge from the multi-agent run.
+  every mode with stub agents, with clean answers and with a first review
+  round that reports a problem, and fails on missing or duplicate labels,
+  on an incomplete answer being accepted, or when inline, resume or
+  `only` diverge from the multi-agent run. Pass stub field values as a
+  third argument to reach phases behind a gate.
 - Document `run` in the workflow's reference page by linking to the
   engineering-practices run-modes reference rather than repeating it.
