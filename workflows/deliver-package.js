@@ -226,6 +226,7 @@ Return the PR URL, whether tests pass, and the non-original items added.`,
     { schema: BUILD, phase: 'Build', label: 'build' },
   )
 if (prior && b && b.pr_url && !gap.length && prBranch.pr) log(`build reused from ${priorFrom}: ${b.pr_url}`)
+else if (prior) log(`build ran on ${priorFrom}'s branch: ${gap.length ? gap.length + ' missing step(s)' : 'no PR open yet, opened one'}`)
 if (!b) return `blocked: build for ${wp} failed (agent returned nothing); branch ${p.branch} may hold partial work`
 
 phase('Document')
