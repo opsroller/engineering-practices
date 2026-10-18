@@ -21,3 +21,7 @@ Reference: the research behind this plugin, for maintainers checking where a rul
 | Developer Certificate of Origin 1.1 | https://developercertificate.org/ | What a contributor certifies about a contribution |
 | Diataxis (Daniele Procida): start, compass, tutorials, how-to guides, reference, explanation, reference vs explanation | https://diataxis.fr/ | The four kinds, the compass, writing rules (`documentation`) |
 | Team Diataxis guide (project-files `documentation/diataxis-guide.md`) | https://diataxis.fr/ (its source) | Repo layout, what each kind of work owes, docs phase prompt, review checklist |
+| GitHub CLI manual: gh pr checks | https://cli.github.com/manual/gh_pr_checks | Polling checks with `--watch` and `--fail-fast`; exit code 8 for pending (`small-change`) |
+| GitHub Docs: About protected branches (require status checks) | https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches | Strict checks: branch up to date with the base before merging, at the cost of extra builds (`small-change` merge step) |
+| GitHub Docs: Managing a merge queue | https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue | Testing each PR against the latest base before it lands; why to update right before merging |
+| Git documentation: git push `--force-with-lease` | https://git-scm.com/docs/git-push | Safe push after rebasing an author-only branch |

@@ -22,5 +22,7 @@ Reference, for roles branching, committing, opening PRs or merging.
 | Reviewer | The code-reviewer role; never the owner unless asked |
 | Merge method | Squash only |
 | Who merges | The author, when CI is green, the reviewer passed and the branch is current |
+| CI | Polled by the author on the latest head SHA, never awaited as a notification |
+| Before merging | Bring in the latest default branch, let CI run on the new head, then squash-merge |
 | After merge | Delete branch, tell dependants |
 | Trunk red | Fix forward in minutes or `revert:` with `Refs: <sha>` |
