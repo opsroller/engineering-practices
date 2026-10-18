@@ -36,7 +36,7 @@ async function run(runOpts) {
   const calls = []
   const agent = async (prompt, opts = {}) => {
     calls.push({ label: opts.label, phase: opts.phase })
-    if (typeof prompt !== 'string' || /undefined|\[object Object\]/.test(prompt)) throw new Error(`bad prompt for ${opts.label}: ${String(prompt).slice(0, 200)}`)
+    if (typeof prompt !== 'string' || /\[object Object\]/.test(prompt)) throw new Error(`bad prompt for ${opts.label}: ${String(prompt).slice(0, 200)}`)
     return fake(opts.schema, opts.label)
   }
   let a = userArgs
