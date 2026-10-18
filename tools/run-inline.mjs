@@ -3,19 +3,21 @@
 // only its new answers instead of the whole results blob.
 // Usage:
 //   node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>]
-//     [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]
+//     [--answer <key>=<file|->]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]
 //   node tools/run-inline.mjs <workflow.js> <state.json> --review-prompt <key>
 // The first call needs the args; they are stored in the state file and reused.
 // Each independent brief is also written as a ready reviewer prompt to
-// <state.json>.review/<key>.md; --review-prompt prints one to stdout.
+// <state.json>.review/<key>.md; --review-prompt prints one to stdout. The
+// reviewer writes its answer to <key>.answer.json (or .txt) next to it, and
+// the next call collects that file by itself.
 // Spec: docs/reference/workflow-run-modes.md, "State file runner".
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const argv = process.argv.slice(2)
 const [file, statePath] = argv
 if (!file || !statePath || file.startsWith('--') || statePath.startsWith('--')) {
-  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh] | --review-prompt <key>")
+  console.error("usage: node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>' | --args-file <file>] [--answer <key>=<file|->]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh] | --review-prompt <key>")
   process.exit(2)
 }
 const state = existsSync(statePath)
@@ -34,7 +36,27 @@ const review = (n) => {
   const base = join(reviewDir, slug(n.key))
   return { prompt: `${base}.md`, answer: `${base}.answer.${n.schema ? 'json' : 'txt'}` }
 }
-const recordCmd = (n) => `node ${process.argv[1]} ${file} ${statePath} --answer '${n.key}=${review(n).answer}' --reviewer '${n.key}=<reviewer name>'`
+const recordCmd = (n) => `node ${process.argv[1]} ${file} ${statePath} --reviewer '${n.key}=<reviewer name>'`
+// A handback is often the reviewer's whole reply: prose around a fenced JSON
+// block. Take the JSON out of it so nobody has to copy it out by hand.
+const parseAnswer = (text) => {
+  const t = text.trim()
+  try { return JSON.parse(t) } catch {}
+  const fences = [...t.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n```/g)].map((m) => m[1])
+  for (const f of fences.reverse()) { try { return JSON.parse(f) } catch {} }
+  const a = t.indexOf('{'), b = t.lastIndexOf('}')
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)) } catch {} }
+  return t
+}
+// Same rule the run-modes block applies: an object answer carries every
+// required field. Checked here so a bad handback fails loudly, not as a re-ask.
+const answerGap = (v, schema) => {
+  if (!schema || schema.type !== 'object') return null
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return 'not a JSON object'
+  const gap = (schema.required || []).filter((k) => !(k in v) || v[k] === undefined)
+  return gap.length ? `missing ${gap.join(', ')}` : null
+}
+const waiting = (k) => (state.next || []).find((b) => b.key === k)
 const reviewText = (n) => [
   `# Independent review: ${n.key} (phase ${n.phase})`,
   '',
@@ -47,12 +69,14 @@ const reviewText = (n) => [
   '## Answer',
   '',
   n.schema
-    ? `Reply with one JSON object and nothing else. It must match this schema and carry every required field (${(n.schema.required || []).join(', ') || 'none'}):\n\n\`\`\`json\n${JSON.stringify(n.schema, null, 2)}\n\`\`\``
-    : 'Reply with a short plain-text answer and nothing else.',
+    ? `Your answer is one JSON object. It must match this schema and carry every required field (${(n.schema.required || []).join(', ') || 'none'}):\n\n\`\`\`json\n${JSON.stringify(n.schema, null, 2)}\n\`\`\``
+    : 'Your answer is a short plain-text answer.',
+  '',
+  `Write your answer, and nothing else, to this file: ${review(n).answer}. It is the one file you may create; it is outside the work under review. Then end your reply with the same answer${n.schema ? ' in a ```json block' : ''}.`,
   '',
   '## For the caller, not the reviewer',
   '',
-  `Save the reviewer's answer to ${review(n).answer} and record it, naming the reviewer, with:`,
+  `The reviewer writes its answer to ${review(n).answer}; the next run collects it from there. Never write that file yourself. If the reviewer could not write files, pass its reply as handed back instead: --answer '${n.key}=-' with the reply on stdin (the JSON is taken out of any surrounding text). Then record it, naming the reviewer, with:`,
   '',
   `    ${recordCmd(n)}`,
   '',
@@ -60,21 +84,25 @@ const reviewText = (n) => [
   '',
 ].join('\n')
 let reviewKey = null
+let fresh = false
+const given = new Set()
 for (let i = 2; i < argv.length; i++) {
   const flag = argv[i]
   // A re-run after a check-in (CI pending, main moved, waiting on a
   // reviewer) starts from the current state, so drop every stored answer.
-  if (flag === '--fresh') { state.results = {}; state.reviewers = {}; continue }
+  if (flag === '--fresh') { state.results = {}; state.reviewers = {}; fresh = true; continue }
   const val = argv[++i]
   if (val === undefined) { console.error(`${flag} needs a value`); process.exit(2) }
   if (flag === '--args') state.args = JSON.parse(val)
   else if (flag === '--args-file') state.args = JSON.parse(readFileSync(val, 'utf8'))
   else if (flag === '--answer') {
     const [k, f] = pair(val, flag)
-    const text = readFileSync(f, 'utf8')
-    let v
-    try { v = JSON.parse(text) } catch { v = text.trim() }
+    const v = parseAnswer(readFileSync(f === '-' ? 0 : f, 'utf8'))
+    const n = waiting(k)
+    const gap = n && answerGap(v, n.schema)
+    if (gap) { console.error(`answer for "${k}" does not fit its schema (${gap}); nothing recorded`); process.exit(2) }
     state.results[k] = v
+    given.add(k)
   } else if (flag === '--reviewer') {
     const [k, name] = pair(val, flag)
     state.reviewers[k] = name
@@ -113,9 +141,27 @@ const budget = { total: null, spent: () => 0, remaining: () => Infinity }
 // Inline mode never spawns; an agent call reaching here is a workflow bug.
 const agent = () => { throw new Error('inline run tried to spawn an agent') }
 
-const given = state.args && typeof state.args === 'object' && !Array.isArray(state.args) ? state.args : {}
-const run = Object.assign({}, given.run || {}, { mode: 'inline', results: state.results, reviewers: state.reviewers })
-const out = await fn(Object.assign({}, given, { run }), agent, () => {}, () => {}, pipeline, parallel, budget)
+// Collect the answer files reviewers wrote for the independent briefs still
+// waiting, unless the caller passed that answer on this call. A collected
+// file is renamed to .used, so a later round of the same key starts clean.
+const collected = []
+for (const n of fresh ? [] : (state.next || []).filter((b) => b.independent && !given.has(b.key) && !(b.key in state.results))) {
+  const f = review(n).answer
+  if (!existsSync(f)) continue
+  const v = parseAnswer(readFileSync(f, 'utf8'))
+  const gap = answerGap(v, n.schema)
+  if (gap) { console.error(`${f}: answer for "${n.key}" does not fit its schema (${gap}); nothing recorded. Have the reviewer rewrite it, or pass --answer '${n.key}=<file>'.`); process.exit(2) }
+  state.results[n.key] = v
+  collected.push([n.key, f])
+}
+for (const [k] of collected) {
+  if (!state.reviewers[k]) { console.error(`collected the answer for "${k}" but no reviewer is named: add --reviewer '${k}=<who>' (nothing recorded)`); process.exit(2) }
+}
+for (const [k, f] of collected) { renameSync(f, `${f}.used`); console.log(`collected ${k} from ${f}`) }
+
+const wfArgs = state.args && typeof state.args === 'object' && !Array.isArray(state.args) ? state.args : {}
+const run = Object.assign({}, wfArgs.run || {}, { mode: 'inline', results: state.results, reviewers: state.reviewers })
+const out = await fn(Object.assign({}, wfArgs, { run }), agent, () => {}, () => {}, pipeline, parallel, budget)
 
 if (!out || typeof out !== 'object' || !out.status) {
   // The workflow returned before the run-modes block could wrap it (usage or arg error).
@@ -136,14 +182,17 @@ if (out.status === 'done') {
   if (again) console.log(`\nThis result asks for a later run. After your check-in, start it over from the current state with:\n  node ${process.argv[1]} ${file} ${statePath} --fresh`)
 } else {
   console.log(`status: next, ${out.next.length} brief(s). Do each, write its answer to a file, then run:`)
-  console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)
+  console.log(`  node ${process.argv[1]} ${file} ${statePath} ${out.next.filter((n) => !n.independent).map((n) => `--answer '${n.key}=<file>'`).join(' ')}`)
   console.log('Add --reviewer \'<key>=<who>\' for each independent brief another reviewer answered.')
   const independent = out.next.filter((n) => n.independent)
   if (independent.length) {
     mkdirSync(reviewDir, { recursive: true })
     for (const n of independent) {
+      // An answer file still here was written for an earlier brief (before
+      // --fresh, or never collected): move it aside so it is not taken for this one.
+      if (existsSync(review(n).answer)) renameSync(review(n).answer, `${review(n).answer}.stale`)
       writeFileSync(review(n).prompt, reviewText(n))
-      console.log(`${n.key}: send ${review(n).prompt} to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '${n.key}'), save its ${n.schema ? 'JSON ' : ''}answer to ${review(n).answer}, then run: ${recordCmd(n)}`)
+      console.log(`${n.key}: send ${review(n).prompt} to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '${n.key}'); it writes its ${n.schema ? 'JSON ' : ''}answer to ${review(n).answer}, which the next run collects. Then run: ${recordCmd(n)}`)
     }
   }
   for (const n of out.next) {

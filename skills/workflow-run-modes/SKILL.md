@@ -80,9 +80,12 @@ node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/<name>.js s
 
 For each independent brief the runner writes a ready reviewer prompt to
 `state.json.review/<key>.md` and prints one line: send that file to a
-fresh reviewer agent (or pipe `--review-prompt <key>` into one), save its
-answer to the path given, and run the printed command, which records it
-with `--answer <key>=<file> --reviewer <key>=<who>`. Keep the state file in your scratch space, not in the
+fresh reviewer agent (or pipe `--review-prompt <key>` into one). The
+prompt has the reviewer write its answer to `state.json.review/<key>.answer.json`,
+and the next call collects that file when you name the reviewer with
+`--reviewer <key>=<who>`, so nothing is copied out of a transcript. If
+the reviewer cannot write files, pass its reply as handed back with
+`--answer <key>=-` on stdin. Never write a reviewer's answer file yourself. Keep the state file in your scratch space, not in the
 repository.
 
 If the workflow tool itself is unavailable, read the workflow file and
