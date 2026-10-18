@@ -5,7 +5,7 @@
 // are checked against their schema, and the resume path of a stopped run.
 // Usage: node tools/test-run-inline.mjs
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -104,7 +104,7 @@ const toReview = (name) => {
   const no = join(dir, 'review-no.json')
   writeFileSync(no, '{"ok": false, "problems": ["step b is missing"]}')
   const r = run(state, ['--answer', `review=${no}`, '--reviewer', 'review=fresh reviewer agent'])
-  check('a blocked result prints a --redo command for the step that stopped it', r.status === 0 && r.stdout.includes(`${state} --redo 'review'`), r.stdout + r.stderr)
+  check('a blocked result prints a --redo command for the step that stopped it', r.status === 0 && r.stdout.includes(`${state} --redo review`), r.stdout + r.stderr)
   check('a blocked result also prints the --fresh command', r.stdout.includes(`${state} --fresh`))
   const again = run(state, ['--redo', 'review'])
   const s = read(state)
@@ -164,6 +164,24 @@ return { note: n }
   const r = spawnSync('node', [runner, tw, state, '--answer', 'note=-'], { encoding: 'utf8', input: reply })
   const s = read(state)
   check('a text brief stores a reply with a fenced JSON block verbatim', r.status === 0 && s.results.note === reply, JSON.stringify(s.results.note) + r.stderr)
+}
+
+{
+  // Printed commands stay whole when run as one shell line, even with a
+  // space and a quote in the paths and a reviewer name with spaces.
+  const odd = join(dir, "dir with 'quote'")
+  mkdirSync(odd)
+  const state = join(odd, 'state file.json')
+  run(state, ['--args', '{}'])
+  run(state, ['--answer', `plan=${planFile}`])
+  const prompt = readFileSync(`${state}.review/review.md`, 'utf8')
+  const line = (prompt.match(/^ {4}(node .*--reviewer .*)$/m) || [])[1] || ''
+  writeFileSync(`${state}.review/review.answer.json`, '{"ok": false, "problems": ["x"]}')
+  const rec = spawnSync('sh', ['-c', line.replace('<reviewer name>', 'code reviewer thread')], { encoding: 'utf8' })
+  check('the printed record command runs as one shell line and keeps a reviewer name with spaces', rec.status === 0 && read(state).reviewers.review === 'code reviewer thread', line + rec.stderr)
+  const redo = (rec.stdout.match(/^ {2}(node .* --redo .*)$/m) || [])[1] || ''
+  const again = spawnSync('sh', ['-c', redo], { encoding: 'utf8' })
+  check('the printed --redo command runs as one shell line with a space and a quote in the paths', again.status === 0 && read(state).next.some((b) => b.key === 'review'), redo + again.stderr)
 }
 
 rmSync(dir, { recursive: true, force: true })

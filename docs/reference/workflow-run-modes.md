@@ -84,7 +84,7 @@ this brief again"`; in agents mode the step runs again.
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
 | `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file\|->]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file and collects reviewers' answer files, and `--review-prompt <key>` prints the reviewer prompt of an independent brief; see [State file runner](#state-file-runner) |
-| `tools/test-run-inline.mjs` | `node tools/test-run-inline.mjs` self-tests the runner on a two-step fixture: answer-file collection, handback parsing, schema checks on every answer (required fields, types, enums, a step not waiting), the resume command of a blocked run, `--fresh` and stale files |
+| `tools/test-run-inline.mjs` | `node tools/test-run-inline.mjs` self-tests the runner on a two-step fixture: answer-file collection, handback parsing, schema checks on every answer (required fields, types, enums, a step not waiting), the resume command of a blocked run, printed commands run as one shell line with spaces and quotes in paths and reviewer names, `--fresh` and stale files |
 | `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
@@ -132,6 +132,20 @@ unchanged when:
 
 So an answer is never dropped in silence: it is used on this call or
 the call fails.
+
+### Printed commands
+
+Every command the runner prints is one shell line. Each argument that
+is not plain (letters, digits and `_@%+=:,./-`) is wrapped in single
+quotes, with a single quote inside it written as `'\''`, so a path or a
+`--reviewer` name with spaces or quotes stays one argument. Run a
+printed line as it is: paste it, or pass it whole to `sh -c "$line"`.
+Never word-split it, as `$line` unquoted or `for arg in $(...)` in a
+loop would: the shell splits `--reviewer 'review=code reviewer thread'`
+into three arguments. A script that adds its own flags keeps each
+argument as one array element (`"${args[@]}"` in bash, an argument list
+in `spawn`), and quotes a reviewer name the same way when it writes
+one into a shell line.
 
 ### Stopped run
 
