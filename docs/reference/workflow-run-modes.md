@@ -45,7 +45,7 @@ the runtime.
 A step recorded as `"self"` is listed in `self_reviewed`. Report its
 result as self-reviewed, not as an independent review.
 
-An independent step only reads and reports: it never edits, commits or pushes. A step that checks and also applies fixes (for example a docs check that fixes what it finds) had a part in the work it judges, so it is not independent; split it into an independent check and a separate fix step after it.
+An independent step only reads and reports: it never edits, commits or pushes. A step that checks and also applies fixes (for example a docs check that ends "Fix what you can") had a part in the work it judges, so it is not independent; split it into an independent check and a separate fix step after it, then an independent recheck if the fix needs judging. Say it in the prompt: an independent prompt that uses any of fix, apply, edit, commit or push counts as writing unless it also says it is read-only ("Do not edit anything", "Read-only", "Fix nothing; list problems").
 
 ## Return envelope
 
@@ -84,7 +84,7 @@ this brief again"`; in agents mode the step runs again.
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
 | `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]...` drives an inline run from a state file; see [State file runner](#state-file-runner) |
-| `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt commits, pushes or applies fixes without saying it must not edit, on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
+| `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
 
@@ -101,6 +101,10 @@ same as driving the Workflow tool by hand.
 | `--answer <key>=<file>` | Stores the file's content under `key`: parsed as JSON when it is JSON, else as trimmed text |
 | `--reviewer <key>=<name>` | Records who answered an independent step |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
+
+An `--answer` for a step the run does not reach on this call is not kept:
+the state file stores the run's own `results`, and the step is asked
+for again in `next` once the run reaches it.
 
 Each call rewrites the state file with the merged `results`,
 `reviewers`, `status` and the full `next` briefs (schemas included), and

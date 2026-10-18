@@ -105,7 +105,7 @@ steps the chosen ones depend on. To redo a step, delete its key.
 - Pass `independent: true` in the options of every step that reviews or
   checks work the same run produced (a review, a fresh read against a
   brief, a verification of claims). Do not mark steps that only gather,
-  build or fix. An independent step only reads and reports: it never edits, commits or pushes. A step that checks and also applies fixes (for example a docs check that fixes what it finds) had a part in the work it judges, so it is not independent; split it into an independent check and a separate fix step after it.
+  build or fix. An independent step only reads and reports: it never edits, commits or pushes. A step that checks and also applies fixes (for example a docs check that fixes what it finds) had a part in the work it judges, so it is not independent; split it into an independent check and a separate fix step after it. The checker treats an independent prompt that says fix, apply, edit, commit or push as writing unless it also says it is read-only, so "Fix what you can" fails and "Fix nothing; list problems" passes.
 - Keep the run-modes block verbatim. Insert or refresh it with
   `node tools/apply-run-modes.mjs <workflow.js>` from the
   engineering-practices repo; never edit a copy by hand.
