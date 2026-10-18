@@ -18,7 +18,7 @@ One line near the top of each file, in its comment syntax:
 With REUSE, add a copyright line too:
 
 ```
-# SPDX-FileCopyrightText: 2026 Jane Doe <jane@example.org>
+# SPDX-FileCopyrightText: 2026 Example Project contributors
 # SPDX-License-Identifier: GPL-2.0-or-later
 ```
 
