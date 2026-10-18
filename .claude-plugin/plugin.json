@@ -1,14 +1,19 @@
 {
   "name": "engineering-practices",
   "version": "0.1.0",
-  "description": "Shared working practices for every role: project onboarding, git with Conventional Commits, work packages, talking to other agents, and asset and code provenance.",
+  "description": "Shared base for every role: project onboarding, trunk-based git with Conventional Commits and squash merge, work packages, direct peer coordination, provenance and licensing of contributions, and Diataxis documentation built into the work.",
   "author": {
     "name": "opsroller"
   },
   "repository": "https://github.com/opsroller/engineering-practices",
-  "license": "MIT",
+  "license": "GPL-2.0-or-later",
   "keywords": [
     "role",
-    "job-function"
+    "job-function",
+    "conventional-commits",
+    "trunk-based-development",
+    "diataxis",
+    "spdx",
+    "work-packages"
   ]
 }
