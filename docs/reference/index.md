@@ -46,7 +46,7 @@ Every workflow, here and in each role plugin, takes the optional `run` arg descr
 | Field | Value |
 |---|---|
 | `name` | `engineering-practices` |
-| `version` | `0.8.0` |
+| `version` | `0.9.0` |
 | `author.name` | `opsroller` |
 | `repository` | `https://github.com/opsroller/engineering-practices` |
 | `license` | `GPL-2.0-or-later` |

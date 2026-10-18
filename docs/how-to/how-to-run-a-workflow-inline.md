@@ -56,13 +56,27 @@ runner, which keeps args and answers in a JSON file:
    the brief has a schema; the full schema is in the state file's
    `next`).
 
-3. Pass the answers, and the reviewer of each independent brief:
+3. For each independent brief, the runner prints a line naming a ready
+   reviewer prompt file, `<state>.review/<key>.md`. Send that file's
+   content to a fresh reviewer agent that had no part in the work (for
+   example the Agent tool with the content as its prompt), or pipe it
+   straight in with `--review-prompt`:
+
+   ```
+   node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --review-prompt review
+   ```
+
+   Save the reviewer's JSON answer to the path the line names. Do not
+   answer an independent brief yourself.
+
+4. Pass the answers, and the reviewer of each independent brief (the
+   printed line has the exact command):
 
    ```
    node <engineering-practices>/tools/run-inline.mjs <plugin>/workflows/screen-audit.js /tmp/audit-state.json --answer plan=plan.json --answer review=review.json --reviewer 'review=code-reviewer thread'
    ```
 
-4. Repeat steps 2 and 3 until it prints `status: done` and the result.
+5. Repeat steps 2 to 4 until it prints `status: done` and the result.
    To redo a step, add `--redo <key>`. When the result asks for a later
    run (`waiting:` on CI, or a land-pr waiting on its reviewer), schedule
    your check-in, then run it again with `--fresh`: it keeps the args and

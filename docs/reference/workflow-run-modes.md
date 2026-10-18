@@ -83,7 +83,7 @@ this brief again"`; in agents mode the step runs again.
 |---|---|
 | `tools/run-modes.js` | Canonical block and the tail line that closes it |
 | `tools/apply-run-modes.mjs` | `node tools/apply-run-modes.mjs <workflow.js>...` inserts the block after `meta` and the tail line at the end, or refreshes an existing copy |
-| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file; see [State file runner](#state-file-runner) |
+| `tools/run-inline.mjs` | `node tools/run-inline.mjs <workflow.js> <state.json> [--args '<JSON>'] [--answer <key>=<file>]... [--reviewer <key>=<name>]... [--redo <key>]... [--fresh]` drives an inline run from a state file, and `--review-prompt <key>` prints the reviewer prompt of an independent brief; see [State file runner](#state-file-runner) |
 | `tools/check-workflow.mjs` | `node tools/check-workflow.mjs <workflow.js> '<args JSON>' ['<stub fields JSON>']` runs the workflow with stub agents in every mode, twice: once with clean answers and once where each first review round reports a problem, so fix loops run. Fails on a block that is not the current canonical copy, on unlabelled or duplicate steps, on a review-like prompt ("independent review", "act as a reviewer", "you did not write", "fresh read") without `independent: true`, on an independent step whose prompt uses fix, apply, edit, commit or push without saying it is read-only (so "Fix what you can" fails and "Fix nothing; list problems" passes), on independent steps recorded wrongly in either mode, on inline or resume results that differ from the multi-agent run, on an answer missing required fields being accepted, and on `only` running other phases. The optional third argument fixes stub values by field name (for example `{"ci":"green"}`) to reach later phases |
 
 ## State file runner
@@ -102,6 +102,7 @@ same as driving the Workflow tool by hand.
 | `--reviewer <key>=<name>` | Records who answered an independent step |
 | `--redo <key>` | Drops a stored answer, so that step is asked again |
 | `--fresh` | Drops every stored answer and keeps the args: use it to run again after a check-in, when the result said to (`waiting:`, `not merged:` or a `next` that says run again) |
+| `--review-prompt <key>` | Prints the reviewer prompt of the independent brief `key` waiting in the state file, and nothing else, so it can be piped to a fresh agent; runs nothing, changes nothing, takes no other flag, and exits 2 if no such brief waits |
 
 Loops that ask a new brief each round, such as land-pr's sync rounds
 while the default branch moves, need no special handling: each round
@@ -113,6 +114,24 @@ check-in would otherwise be replayed.
 An `--answer` for a step the run does not reach on this call is not kept:
 the state file stores the run's own `results`, and the step is asked
 for again in `next` once the run reaches it.
+
+For each independent brief in `next`, the runner also writes a
+self-contained reviewer prompt to `<state.json>.review/<key>.md` (the key
+with any character outside `A-Za-z0-9._-` replaced by `_`, so
+`review:1` becomes `review_1.md`). It holds the brief, a line that the
+reviewer had no part in the work and must only read and report, changing
+no files, the answer schema with its required fields, and, in a section
+marked for the caller, the command that records the answer. The runner
+prints one line per independent brief, before the briefs:
+
+```
+<key>: send <dir>/<key>.md to a fresh reviewer agent (e.g. the Agent tool with that file's content as the prompt, or --review-prompt '<key>'), save its JSON answer to <dir>/<key>.answer.json, then run: node tools/run-inline.mjs <workflow.js> <state.json> --answer '<key>=<dir>/<key>.answer.json' --reviewer '<key>=<reviewer name>'
+```
+
+The answer file ends in `.txt` instead for a brief with no schema.
+Recording the answer with `--reviewer` keeps the step out of
+`self_reviewed`. Briefs that are not independent get no file and print
+as before.
 
 Each call rewrites the state file with the merged `results`,
 `reviewers`, `status` and the full `next` briefs (schemas included), and
