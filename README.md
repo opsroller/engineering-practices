@@ -29,6 +29,7 @@ walks through one package in a practice repository, step by step.
 [land a small change](docs/how-to/how-to-land-a-small-change.md),
 [land an existing pull request](docs/how-to/how-to-land-an-existing-pull-request.md),
 [change a shared contract](docs/how-to/how-to-change-a-shared-contract.md),
+[edit a path another role owns](docs/how-to/how-to-edit-a-path-another-role-owns.md),
 [add third-party material](docs/how-to/how-to-add-third-party-material.md) and
 [run a workflow inline](docs/how-to/how-to-run-a-workflow-inline.md)
 when its subagents cost too much.

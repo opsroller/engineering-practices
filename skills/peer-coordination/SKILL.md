@@ -1,6 +1,6 @@
 ---
 name: peer-coordination
-description: Use when your work depends on, blocks or changes another agent's work, when a contract needs to change, when you hand off finished work, or when you need the coordinator. Agents message each other directly.
+description: Use when your work depends on, blocks or changes another agent's work, when a change must touch a path another role owns, when a contract needs to change, when you hand off finished work, or when you need the coordinator. Agents message each other directly.
 ---
 
 # Peer coordination
@@ -46,6 +46,41 @@ Link: <PR or file:line>
 What, why, link or `file:line`, and what happens next. No status
 chatter: PRs, commits and the plan are the record.
 
+## Cross-role edits: touching a path another role owns
+
+Your owned paths are where you write (`work-packages`). Sometimes a
+change cannot work without a small edit in a path another role owns: a
+new CI check needs a test target registered in a build file, a renamed
+asset needs one import path updated. First ask whether the owner can
+make it, or whether the change can live in your own paths (a new file
+beside theirs, a hook they already expose). If neither works without
+breaking the change in two, make the edit yourself, under these rules:
+
+1. **Minimal.** Only the lines the change needs: no reformatting,
+   renames, refactors or "while I'm here" fixes in their file. If you
+   cannot describe the edit in one line, it is not minimal; ask the
+   owner to do it.
+2. **Separate commit.** Put each cross-role edit in its own commit, so
+   the owner can review it alone. Where the project squash-merges, that
+   commit exists only during review: after the merge the owner reverts
+   those lines by hand. If the edit must be revertible on its own, land
+   it as its own small PR first.
+3. **Flagged in the PR.** Add a "Cross-role edits" section to the PR
+   description: path, owner, what changed, and why it could not live in
+   your paths.
+4. **Owner notified.** Message the owner directly with that list and the
+   PR link before you merge (message shape below). Where the host
+   supports code owners, their review is requested automatically; still
+   send the message.
+5. **Objections stop the merge.** If the owner objects, take the edit
+   out or ask the coordinator to decide; do not merge over it. If the
+   owner has not answered by the time review passes, merge and leave the
+   notice standing; they can still ask for a revert.
+
+Never use this for contracts (use expand, migrate, contract below), for
+work that belongs in the owner's package, or to fix their bug: report
+those instead.
+
 ## Changing a shared contract safely
 
 Use **expand, migrate, contract** (parallel change):
@@ -86,7 +121,8 @@ Open-ended "let's keep in touch" coupling is the failure mode.
 
 ## Failure modes
 
-- Editing another owner's file "to save time".
+- Editing another owner's file "to save time", or a cross-role edit
+  that is larger than the change needs, unflagged or unannounced.
 - Discovering a contract change from a broken build.
 - Long threads instead of one actionable message.
 - Silent blocking: waiting for days without telling anyone.

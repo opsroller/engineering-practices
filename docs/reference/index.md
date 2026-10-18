@@ -26,7 +26,7 @@ Landing work:
 
 Working with others:
 
-- [peer-coordination](skill-peer-coordination.md): direct messages, contract changes, hand-offs.
+- [peer-coordination](skill-peer-coordination.md): direct messages, cross-role edits, contract changes, hand-offs.
 
 Running workflows:
 
