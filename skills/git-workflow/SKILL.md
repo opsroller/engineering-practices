@@ -43,10 +43,12 @@ Message and type details: [commit-reference.md](commit-reference.md).
   review and bisecting the branch easier.
 - Test by running: after each small change, build and run the product
   briefly to see that it works (and, where speed matters, that it is
-  still fast). Run the unit tests for what you changed. Do not run the
-  full CI or integration suites on every change; CI and the reviewer
-  run them once, on the PR.
-- Push and commit only work you have run yourself and know works.
+  still fast). Run the unit tests for what you changed. For a docs or
+  config change, run the check that exercises it (docs build, link
+  check). Do not run the full CI or integration suites on every
+  change; they run on the PR (CI on each pushed head, and the
+  reviewer).
+- Push only work you have run yourself and know works.
   Never push to get CI or a reviewer to test it for you.
 
 ## 3. Pull request

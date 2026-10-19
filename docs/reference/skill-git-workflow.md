@@ -16,7 +16,7 @@ Reference, for roles branching, committing, opening PRs or merging.
 | Commit | Conventional Commits 1.0.0: `<type>[(scope)][!]: <description>` |
 | Types | `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `style`, `chore`, `revert` |
 | Breaking | `!` before the colon and/or `BREAKING CHANGE:` footer |
-| Testing while developing | Build and run the product briefly after each small change, plus unit tests for what changed; full CI and integration suites run once, on the PR |
+| Testing while developing | Build and run the product briefly after each small change, plus unit tests for what changed; full CI and integration suites run on the PR (CI on each pushed head, and the reviewer) |
 | Opening a PR | Only when the change is built, run, tested and documented; never for work in progress |
 | PR size | One concern; about 100 lines comfortable, 1000 too big |
 | PR title | A valid Conventional Commit; becomes the squash commit |

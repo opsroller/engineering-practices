@@ -59,8 +59,8 @@ A row without a testable done-when is not ready; ask the coordinator
   in place (expand, migrate, then contract; see `peer-coordination`).
 - Test by running: after each small change, build and run the product
   briefly to see that it works, plus the unit tests for what you
-  changed. Leave the full CI and integration suites to CI, once, on the
-  PR (`git-workflow`).
+  changed. Leave the full CI and integration suites to CI on the PR
+  (`git-workflow`).
 - Hit something outside scope? Note it as a follow-up in the PR (or ask
   the coordinator for a new package). Do not grow the package.
 
