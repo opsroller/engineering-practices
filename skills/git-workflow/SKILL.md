@@ -41,7 +41,15 @@ Message and type details: [commit-reference.md](commit-reference.md).
 - Commit in small logical steps; a commit that fits two types is two
   commits. Branch commits are squashed on merge, but clear ones make
   review and bisecting the branch easier.
-- Run the project's build, tests and linters before every push.
+- Test by running: after each small change, build and run the product
+  briefly to see that it works (and, where speed matters, that it is
+  still fast). Run the unit tests for what you changed. For a docs or
+  config change, run the check that exercises it (docs build, link
+  check). Do not run the full CI or integration suites on every
+  change; they run on the PR (CI on each pushed head, and the
+  reviewer).
+- Push only work you have run yourself and know works.
+  Never push to get CI or a reviewer to test it for you.
 
 ## 3. Pull request
 
@@ -57,8 +65,11 @@ Message and type details: [commit-reference.md](commit-reference.md).
   edits" section for any edit in another role's path
   (`peer-coordination`); `Refs: WP-<id>`.
   Enough context that a reader without links can follow it.
-- Open as **draft** early. Mark ready when CI is green and you have
-  reviewed your own diff top to bottom.
+- Open the PR **when the change is ready**: built, run and working,
+  with its tests and docs, and your own diff reviewed top to bottom.
+  Never open one for work still in progress; PRs queue CI. Open it as
+  a draft if the project wants that, and mark it ready once CI is
+  green.
 - Re-read the title and description before merging; PRs change during
   review.
 

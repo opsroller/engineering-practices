@@ -57,7 +57,10 @@ A row without a testable done-when is not ready; ask the coordinator
 - Put your tests in files for your package rather than editing others'.
 - Add new things beside old ones rather than changing a shared contract
   in place (expand, migrate, then contract; see `peer-coordination`).
-- Run the project's build and tests before every push.
+- Test by running: after each small change, build and run the product
+  briefly to see that it works, plus the unit tests for what you
+  changed. Leave the full CI and integration suites to CI on the PR
+  (`git-workflow`).
 - Hit something outside scope? Note it as a follow-up in the PR (or ask
   the coordinator for a new package). Do not grow the package.
 

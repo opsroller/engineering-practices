@@ -4,10 +4,10 @@ export const meta = {
   description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>", prior: "<handoff object or full result of a role workflow that already built the work, optional>" }',
   phases: [
     { title: 'Plan', detail: 'onboard, check for overlapping work, read the package and contracts, plan slices, stubs, caveats and affected Diataxis doc kinds' },
-    { title: 'Build', detail: 'implement on the package branch with provenance recorded; with prior, only what the prior work left out' },
-    { title: 'Document', detail: 'write or update the planned Diataxis pages in the same PR; skipped when prior already wrote them' },
+    { title: 'Build', detail: 'implement on the package branch with provenance recorded, testing by running the product; no PR yet; with prior, only what the prior work left out' },
+    { title: 'Document', detail: 'write or update the planned Diataxis pages on the same branch; skipped when prior already wrote them' },
     { title: 'Check', detail: 'independent review of change and docs, fix loop (max 3 rounds)' },
-    { title: 'Ship', detail: 'merge the default branch in, extend the PR to items it added that the PR must also touch, confirm CI (one re-run of a single flaky job, logged), PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
+    { title: 'Ship', detail: 'merge the default branch in, open the PR if none is open, extend the PR to items it added that the PR must also touch, confirm CI (one re-run of a single flaky job, logged), PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
   ],
 }
 
@@ -281,8 +281,8 @@ Follow the engineering-practices skills git-workflow, provenance and peer-coordi
 Do only these missing steps (none means change no files):
 ${list(gap)}
 Done when: ${p.done_when}
-${existing} Fetch it; if it is behind the default branch, merge the default branch in first. Commit with Conventional Commits, run the project's build and tests, push, and reuse its open PR or open a draft PR titled as a Conventional Commit with "Refs: ${wp}" in the body.
-Return the PR URL, whether tests pass, and the non-original items added.${nearNote}` : 
+${existing} Fetch it; if it is behind the default branch, merge the default branch in first. Test by running (engineering-practices git-workflow): build and run the product briefly to see it works, and run the unit tests for what you changed; leave the full CI and integration suites to CI on the PR. Commit with Conventional Commits and push. Do not open a PR; the Ship step opens one once the work is documented and reviewed.
+Return the PR URL if one is already open, whether tests pass, and the non-original items added.${nearNote}` : 
   `Implement ${wp} on branch ${p.branch}, writing only in: ${owned}.
 Follow the engineering-practices skills git-workflow, work-packages, provenance and peer-coordination, and the job-function plugin for this package's role.
 Steps:
@@ -291,12 +291,12 @@ Stub against the contracts: ${(p.stubs || []).join(', ') || 'none'}.
 Done when: ${p.done_when}
 License every new file under the project's license with its header rule, never a template default; log every non-original item in the provenance log.
 ${existing ? `${existing} Fetch it and build on the work already there; if it is behind the default branch, merge the default branch in first.` : `Cut ${p.branch} from the latest remote default branch.`}
-Commit with Conventional Commits, run the project's build and tests, push to ${p.branch}, and ${existing ? 'reuse its open PR (open a draft PR only if none exists), making sure the title is a Conventional Commit, with' : 'open a draft PR titled as a Conventional Commit with'} "Refs: ${wp}" in the body.
-Return the PR URL, whether tests pass, and the non-original items added.${nearNote}`,
+Test by running (engineering-practices git-workflow): build and run the product briefly to see it works, and run the unit tests for what you changed; leave the full CI and integration suites to CI on the PR. Commit with Conventional Commits and push to ${p.branch}. Do not open a PR; the Ship step opens one once the work is documented and reviewed.
+Return the PR URL if one is already open, whether tests pass, and the non-original items added.${nearNote}`,
     { schema: BUILD, phase: 'Build', label: 'build' },
   )
 if (prior && b && b.pr_url && !gap.length && prBranch.pr) log(`build reused from ${priorFrom}: ${b.pr_url}`)
-else if (prior) log(`build ran on ${priorFrom}'s branch: ${gap.length ? gap.length + ' missing step(s)' : 'no PR open yet, opened one'}`)
+else if (prior) log(`build ran on ${priorFrom}'s branch: ${gap.length ? gap.length + ' missing step(s)' : 'no PR open yet'}`)
 if (!b) return `blocked: build for ${wp} failed (agent returned nothing); branch ${p.branch} may hold partial work`
 
 phase('Document')
@@ -304,10 +304,10 @@ const missingDocs = (p.docs || []).length > 0
 const d = prior && priorDocs.length && !missingDocs
   ? { pages: priorDocs, undocumented: [].concat(prior.undocumented || []) }
   : await agent(
-  `Follow the engineering-practices documentation skill for ${wp} on branch ${p.branch} (PR ${b.pr_url || 'open for this branch'}). Docs layout: ${p.docs_layout || 'see the project profile'}.
+  `Follow the engineering-practices documentation skill for ${wp} on branch ${p.branch}${b.pr_url ? ` (PR ${b.pr_url})` : ''}. Docs layout: ${p.docs_layout || 'see the project profile'}.
 Planned pages:
 ${list(docsPlan)}
-Classify every user-visible change in this work with the Diataxis compass (action/cognition x study/work). For each, update or add exactly one page of that kind under the project's docs layout (default docs/<kind>/), keep each page to one kind, title it by the project pattern, and link to the related pages of the other kinds. Run every command and step you write. Commit the pages to the same PR (Conventional Commits) and push; list them by kind in the PR body.
+Classify every user-visible change in this work with the Diataxis compass (action/cognition x study/work). For each, update or add exactly one page of that kind under the project's docs layout (default docs/<kind>/), keep each page to one kind, title it by the project pattern, and link to the related pages of the other kinds. Run every command and step you write. Commit the pages to ${p.branch} (Conventional Commits) and push; they ship in the same PR as the change.
 Report pages touched and any change you left undocumented and why.`,
   { schema: DOCS, phase: 'Document', label: 'docs' },
   )
@@ -319,7 +319,7 @@ let open = []
 let reviewed = false
 for (let round = 1; round <= 3; round++) {
   const r = await agent(
-    `Act as an independent reviewer (follow the code-reviewer role if installed) of the open PR for ${wp} on ${p.branch}. Do not edit anything.
+    `Act as an independent reviewer (follow the code-reviewer role if installed) of the work for ${wp} on ${p.branch} (its diff against the latest remote default branch). Do not edit anything.
 Check: done-when "${p.done_when}" is met; tests cover the change; only owned paths (${owned}) changed; Conventional Commit title; provenance logged and every new file carries the project's license header; docs per the engineering-practices documentation skill's Check step and the technical-writer docs-review checklist if installed (each touched page one Diataxis kind, titles follow the patterns, links connect the kinds, docs in this same PR, nothing user-visible left undocumented).
 List blocking problems only where you can point to a realistic failure or a broken rule; list other suggestions separately.`,
     { schema: REVIEW, phase: 'Check', label: `review:${round}`, independent: true },
@@ -331,7 +331,7 @@ List blocking problems only where you can point to a realistic failure or a brok
   log(`round ${round}: ${open.length} blocking`)
   if (round === 3) break
   await agent(
-    `Fix these blocking review findings for ${wp} on ${p.branch}, staying in owned paths (${owned}). Follow the engineering-practices skills git-workflow, provenance and documentation. Run the build and tests, commit (Conventional Commits) and push:
+    `Fix these blocking review findings for ${wp} on ${p.branch}, staying in owned paths (${owned}). Follow the engineering-practices skills git-workflow, provenance and documentation. Build and run the product briefly to see it works and run the unit tests for what you changed, then commit (Conventional Commits) and push:
 ${list(open)}`,
     { phase: 'Check', label: `fix:${round}` },
   )
@@ -343,14 +343,14 @@ if (!reviewed || open.length) {
 phase('Ship')
 const s = await agent(
   `For ${wp} on ${p.branch}:
-1. Bring it up to date: fetch and merge the latest remote default branch into ${p.branch} (a merge, not a rebase, unless the profile requires a rebase and you alone push to the branch). Resolve conflicts the engineering-practices land-pr way: shared lists (docs indexes, changelogs, registries, manifests) keep both sides' entries in the file's order with no duplicates; lockfiles and generated files take the default branch's version and are regenerated; same logic changed on both sides is combined only if both intents provably hold, otherwise abort the merge and return the files as ci "red: conflicts: <files>". ${CROSS_PR(p.branch, 'the default branch')} Unresolved items go in ci as "red: cross-PR: <items>". Re-run the build and tests and push.
-2. Confirm the build, tests and CI pass on the pushed head. ${BASE_CURRENT} ${FLAKE} ${RED_BASE} A "red-on-base" CI state does not hold the PR back from review.
-3. ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; re-read the PR title and description so they match the final change (docs by Diataxis kind, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
+1. Bring it up to date: fetch and merge the latest remote default branch into ${p.branch} (a merge, not a rebase, unless the profile requires a rebase and you alone push to the branch). Resolve conflicts the engineering-practices land-pr way: shared lists (docs indexes, changelogs, registries, manifests) keep both sides' entries in the file's order with no duplicates; lockfiles and generated files take the default branch's version and are regenerated; same logic changed on both sides is combined only if both intents provably hold, otherwise abort the merge and return the files as ci "red: conflicts: <files>". ${CROSS_PR(p.branch, 'the default branch')} Unresolved items go in ci as "red: cross-PR: <items>". Build and run the product briefly and push.
+2. If no PR is open for ${p.branch}, open one now (a draft if the project wants drafts), titled as a Conventional Commit with "Refs: ${wp}" in the body. Confirm CI passes on the pushed head. ${BASE_CURRENT} ${FLAKE} ${RED_BASE} A "red-on-base" CI state does not hold the PR back from review.
+3. ${p.ship_status && p.ship_status !== 'unchanged' ? `set the package's status row in ${plan} within the PR to "${p.ship_status}", the project's own value for this package once the PR lands` : `leave the package's status row in ${plan} as it is: the project changes rows outside package PRs`}; write or re-read the PR title and description so they match the final change (docs by Diataxis kind${d && d.pages && d.pages.length ? `: ${d.pages.join(', ')}` : ''}, stubs, non-original items with licenses, "Refs: ${wp}"${caveats.length ? ', and a "Known risks" section listing these caveats' : ''}); mark the PR ready and ${REVIEWER}. Follow engineering-practices git-workflow and peer-coordination.
 Do not merge here: the author squash-merges after the reviewer passes it and CI is green.
 ${caveats.length ? `Caveats:\n${list(caveats)}\n` : ''}Return the PR URL, CI state, the status value you set (or "unchanged"), the cross-PR items you applied, any flakes, any red_on_base checks, and the dependant packages to notify with the PR link once merged.`,
   { schema: SHIP, phase: 'Ship', label: 'ship' },
 )
-if (!s) return `blocked: ship step for ${wp} failed (agent returned nothing); PR ${b.pr_url || 'on ' + p.branch} is reviewed but not marked ready`
+if (!s) return `blocked: ship step for ${wp} failed (agent returned nothing); ${b.pr_url ? `PR ${b.pr_url}` : `branch ${p.branch}`} is reviewed but its PR is not open or marked ready`
 return {
   wp,
   pr: s.pr_url,
