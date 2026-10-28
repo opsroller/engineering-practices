@@ -65,17 +65,13 @@ contract, not ongoing chatter. Direct messages are for the moments a
 contract is not enough: a change request, a hand-off, a block. The
 coordinator remains the place for conflicts with what the owner asked.
 
-## Why provenance is everyone's job
+## Why provenance comes from the build
 
-A project can only be rebuilt, audited and trusted if everything in it
-can be traced: which commit and review a change came from, which
-generator and command made a file, which exact version of a dependency
-or upstream file went in, and which pipeline run built what ships. That
-record has to be made by whoever adds the thing, at the moment they add
-it. Recording an origin, version and checksum costs a minute;
-reconstructing it later, after a URL has moved or a laptop build has
-shipped, can be impossible. The devops-engineer role then proves the
-same chain for releases with signed build attestations.
+Provenance is only worth anything if a person can't fake it. That is why
+a tool in the project's build generates it, recording the commit,
+builder and output digests as the build runs, and why a verifier checks
+it before release. Every role's part is simply not to route around that
+tool: ship what the pipeline built, and leave the provenance step alone.
 
 ## Why documentation lives inside the work
 

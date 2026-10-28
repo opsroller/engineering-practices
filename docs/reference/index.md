@@ -22,7 +22,7 @@ Landing work:
 
 - [git-workflow](skill-git-workflow.md): branches, Conventional Commits, PRs, squash merge.
 - [documentation](skill-documentation.md): Diataxis rule and what each kind of work owes.
-- [provenance](skill-provenance.md): original or licensed material, headers, provenance log.
+- [provenance](skill-provenance.md): build provenance generated and verified by tools; license headers.
 
 Working with others:
 

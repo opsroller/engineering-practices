@@ -12,14 +12,10 @@ This guide shows you how to add outside material so the project may ship it.
    add the SPDX line in the file's comment syntax. If it cannot (images,
    audio, fonts), add a `<file>.license` sidecar or a `REUSE.toml` entry,
    as the project does.
-4. Append a row to the provenance log: path, origin (source URL),
-   exact version or commit, checksum, changes you made, package id.
-   Add the upstream copy unchanged first; make your changes in later
-   commits.
-5. If the license requires attribution, add the credit to the credits
+4. If the license requires attribution, add the credit to the credits
    file.
-6. List the item with source and license in the PR body.
-7. If the project has a license checker, run it.
+5. List the item with source and license in the PR body.
+6. If the project has a license checker, run it.
 
 For your own new files, use the project's license and header, never the
 default a generator or template stamped on them.
