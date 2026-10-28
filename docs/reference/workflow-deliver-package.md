@@ -15,7 +15,7 @@ Reference, for anyone running a work package through the workflow.
 | Phase | Does |
 |---|---|
 | Plan | Onboard; checks for [overlapping work](#overlapping-work); branch, owned paths, slices, stubs, done-when, docs layout, Diataxis doc plan, `caveats`, `ship_status`; stops if the row is not ready or the package is already in flight |
-| Build | Implements in owned paths with Conventional Commits, license headers, provenance log; tests by building and running the product briefly plus unit tests for what changed; pushes the branch but opens no PR. With `prior`: skipped when `prior.pr` is set and Plan finds nothing missing; otherwise does only the missing steps |
+| Build | Implements in owned paths with Conventional Commits; tests by building and running the product briefly plus unit tests for what changed; pushes the branch but opens no PR. With `prior`: skipped when `prior.pr` is set and Plan finds nothing missing; otherwise does only the missing steps |
 | Document | Writes or updates the planned pages, one kind each, on the same branch. With `prior`: skipped when `prior.docs` lists pages and Plan finds none missing |
 | Check | Independent review of change and docs; up to 3 review rounds with fixes between |
 | Ship | Opens the PR if none is open (the change is now built, documented and reviewed); merges the latest default branch in (land-pr's conflict rules), applies cross-PR items (extends the change to new members of any set it edits member by member, adapts to renames), merges the base in again before any CI wait while the host reports the PR as conflicting or behind ([as in land-pr](workflow-land-pr.md#base-current-before-ci)), confirms CI with at most one re-run of a single failing job whose cause is outside the diff (a pass is logged as a flake), treats a check red or hung on the default branch too as [land-pr does](workflow-land-pr.md#red-on-the-default-branch) (a ported fix or one PR comment; it does not hold the PR back from review), sets the plan row to `ship_status` (or leaves it), aligns PR title and body (with a "Known risks" section for caveats), marks ready, asks the code-reviewer role ([reaching the reviewer](#reaching-the-reviewer)) |
@@ -56,7 +56,7 @@ The PR or branch passed in (`pr`, `branch` or `prior`) does not count.
 workflow, so it is shipped without being built again. Pass the role
 workflow's whole result, or its `handoff` field; a run-modes envelope
 (`{ run, status, result }`) is unwrapped too. Plan, Check and Ship still
-run: the package row, owned paths, provenance and docs are checked
+run: the package row, owned paths and docs are checked
 against the package, not only the role's own checks.
 
 Handoff object, which any role workflow can return as `handoff`. Every
@@ -71,7 +71,6 @@ not usable` result, with the usage string:
 | `from` | no | Workflow that built it, e.g. `<plugin>:<workflow>` |
 | `docs` | no; a list when given | Docs pages already written in the branch |
 | `undocumented` | no; a list when given | Changes left undocumented, and why |
-| `non_original` | no; a list when given | Non-original items added, for the provenance check |
 | `notes` | no | Informational notes for the reviewer; never blocking |
 
 An explicit `branch` or `pr` arg wins over the one in `prior`, and fills

@@ -1,30 +1,19 @@
 # provenance skill
 
-Reference, for roles adding any file or material.
+Reference, for any role building or releasing.
 
 | Field | Value |
 |---|---|
-| Files | `skills/provenance/SKILL.md`, `skills/provenance/license-headers.md` |
-| Use when | Adding code, assets, text, fonts, sounds, data or names; adding headers |
+| Files | `skills/provenance/SKILL.md` |
+| Use when | Onboarding, building or releasing |
 
-## Decision table
+## Provenance
 
-| Material | Allowed when |
+| Item | Value |
 |---|---|
-| Own original work | Always, under the project's license (never a template default) |
-| Script-generated | Always; commit the generator |
-| Third-party | License on the profile's allowed list and compatible |
-| Dependency | Same as third-party |
-| Unknown or personal-use license | Never |
-| AI-assisted | As own work, checked for close copies |
-
-## Header formats
-
-| File kind | Header |
-|---|---|
-| Commentable | `SPDX-License-Identifier: <expression>` (and `SPDX-FileCopyrightText` under REUSE) in the file's comment syntax |
-| Not commentable | `<file>.license` sidecar or `REUSE.toml` `[[annotations]]` entry |
-
-## Provenance log columns
-
-Path, origin, author, license, changes, added in.
+| Produced by | The provenance tool in the project's build, never by hand |
+| Format | SLSA provenance: in-toto attestation, predicate type `https://slsa.dev/provenance/v1` |
+| Records | Source repository and commit, build entry point and parameters, builder, output digests |
+| Example generators | `slsa-framework/slsa-github-generator`, `actions/attest-build-provenance`, `cosign attest --type slsaprovenance` |
+| Example verifiers | `slsa-verifier`, `gh attestation verify` |
+| Missing or failing tool | Hand to the devops-engineer role (`supply-chain-security`) |

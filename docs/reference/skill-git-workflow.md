@@ -20,7 +20,7 @@ Reference, for roles branching, committing, opening PRs or merging.
 | Opening a PR | Only when the change is built, run, tested and documented; never for work in progress |
 | PR size | One concern; about 100 lines comfortable, 1000 too big |
 | PR title | A valid Conventional Commit; becomes the squash commit |
-| PR body | What and why, testing, stubs, docs by kind, non-original items, `Refs: WP-<id>` |
+| PR body | What and why, testing, stubs, docs by kind, `Refs: WP-<id>` |
 | Reviewer | The code-reviewer role; never the owner unless asked |
 | Merge method | Squash only |
 | Who merges | The author, when CI is green, the reviewer passed and the branch is current |

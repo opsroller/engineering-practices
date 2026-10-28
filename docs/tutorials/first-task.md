@@ -34,7 +34,6 @@ Project profile: docs/project-profile.md. Squash merge only.
 Create `docs/project-profile.md`:
 
 ```
-License: GPL-2.0-or-later; every file starts with an SPDX-License-Identifier line.
 Docs: docs/how-to, docs/reference, docs/explanation (Diataxis).
 Build: none. Test: `test -f greet.sh`.
 Role map: package-lead owns greet.sh and docs/.
@@ -77,9 +76,7 @@ git log --oneline -1
 ```
 
 You should see a Conventional Commit such as
-`feat(greet): add greeting script`. Open `greet.sh`: its first comment
-line is `# SPDX-License-Identifier: GPL-2.0-or-later`, because the
-profile asked for it.
+`feat(greet): add greeting script`.
 
 ## 4. Check the docs it wrote
 
@@ -99,7 +96,7 @@ code-reviewer role to review, then squash-merge once CI is green and the
 review passes. Here, there is no remote, so stop at the report.
 
 You have run a work package the way every role on the team does: onboard,
-branch, small commit, license header, docs of the right kind, ready for
+branch, small commit, docs of the right kind, ready for
 review.
 
 Next: [How to deliver a work package](../how-to/how-to-deliver-a-work-package.md)

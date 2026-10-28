@@ -1,6 +1,6 @@
 ---
 name: project-onboarding
-description: Use at the start of any task in any project, before reading code or writing anything. Finds the project's stack, commands, owned paths, contracts, license rule and docs layout so a generic role can work in it.
+description: Use at the start of any task in any project, before reading code or writing anything. Finds the project's stack, commands, owned paths, contracts, provenance tool and docs layout so a generic role can work in it.
 ---
 
 # Project onboarding
@@ -20,9 +20,8 @@ it yesterday: profiles and contracts change.
    - stack and tools for your role (engine, language, editor, DAW, ...);
    - build, test, lint and run commands, and how CI runs them;
    - targets (platforms, browsers, devices) and budgets;
-   - **license rule**: the project license, the header rule (e.g. an
-     SPDX line per file, REUSE), which third-party licenses are allowed,
-     where the provenance log and credits live;
+   - **provenance tool**: which tool in the build generates provenance,
+     and where its output goes (`provenance`);
    - **docs layout**: where the four Diataxis kinds live
      (`docs/tutorials`, `docs/how-to`, `docs/reference`,
      `docs/explanation`, or the project's equivalent);
@@ -65,14 +64,13 @@ You can answer, without guessing:
 - [ ] Which paths may I write? Which may I only read?
 - [ ] Which commands build, test and lint my change?
 - [ ] Which contracts constrain me, and who owns each?
-- [ ] What license and header rule apply to new files?
 - [ ] Where do the docs for my change go, by Diataxis kind?
 - [ ] What branch, commit scope and done-when apply?
 
 ## Failure modes
 
 - Starting from memory of "how projects usually work" and missing the
-  project's own rule (license header, docs path, merge policy).
+  project's own rule (docs path, merge policy).
 - Treating a role plugin's examples (a tool named "e.g.") as the
   project's choice.
 - Editing a file outside owned paths "because it was quicker".

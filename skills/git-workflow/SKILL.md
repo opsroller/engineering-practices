@@ -60,8 +60,7 @@ Message and type details: [commit-reference.md](commit-reference.md).
 - **Title** = a valid Conventional Commit line. It becomes the squash
   commit, so it is the permanent record.
 - **Description**: what changed and why; how it was tested; what was
-  stubbed or left out; docs updated (by Diataxis kind); sources and
-  licenses of anything not original (`provenance`); a "Cross-role
+  stubbed or left out; docs updated (by Diataxis kind); a "Cross-role
   edits" section for any edit in another role's path
   (`peer-coordination`); `Refs: WP-<id>`.
   Enough context that a reader without links can follow it.
@@ -152,7 +151,6 @@ is not a failure; leaving trunk red is.
 - [ ] Title is a valid Conventional Commit; `!`/`BREAKING CHANGE` if it breaks a contract
 - [ ] Diff is one concern, tests included, refactors separate
 - [ ] Docs for the change are in this PR (`documentation`)
-- [ ] Provenance recorded for anything not original (`provenance`)
 - [ ] CI green, reviewer passed, branch current
 - [ ] Squash merge selected, branch deleted after
 

@@ -22,7 +22,7 @@ Landing work:
 
 - [git-workflow](skill-git-workflow.md): branches, Conventional Commits, PRs, squash merge.
 - [documentation](skill-documentation.md): Diataxis rule and what each kind of work owes.
-- [provenance](skill-provenance.md): original or licensed material, headers, provenance log.
+- [provenance](skill-provenance.md): build provenance generated and verified by tools.
 
 Working with others:
 
@@ -50,7 +50,7 @@ Every workflow, here and in each role plugin, takes the optional `run` arg descr
 | `author.name` | `opsroller` |
 | `repository` | `https://github.com/opsroller/engineering-practices` |
 | `license` | `GPL-2.0-or-later` |
-| `keywords` | `role`, `job-function`, `conventional-commits`, `trunk-based-development`, `diataxis`, `spdx`, `work-packages` |
+| `keywords` | `role`, `job-function`, `conventional-commits`, `trunk-based-development`, `diataxis`, `work-packages` |
 
 ## Sources
 

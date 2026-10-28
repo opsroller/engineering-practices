@@ -65,15 +65,13 @@ contract, not ongoing chatter. Direct messages are for the moments a
 contract is not enough: a change request, a hand-off, a block. The
 coordinator remains the place for conflicts with what the owner asked.
 
-## Why provenance is everyone's job
+## Why provenance comes from the build
 
-A project can only be distributed if everything in it may be. A single
-copied image or snippet with no license can block a release or force a
-rewrite later, and generators routinely stamp the wrong license on new
-files. The Developer Certificate of Origin captures the promise each
-contributor makes; SPDX identifiers and the REUSE conventions make that
-promise checkable by tools. Recording the source at the moment of adding
-something costs a minute; reconstructing it later can be impossible.
+Provenance is only worth anything if a person can't fake it. That is why
+a tool in the project's build generates it, recording the commit,
+builder and output digests as the build runs, and why a verifier checks
+it before release. Every role's part is simply not to route around that
+tool: ship what the pipeline built, and leave the provenance step alone.
 
 ## Why documentation lives inside the work
 
@@ -93,8 +91,8 @@ documentation as a job in its own right.
 - **code-reviewer** is the review gate. This plugin prepares PRs for it.
 - **technical-writer** owns the Diataxis method, docs sets and audits.
   This plugin requires each role to write the docs its own change owes.
-- **devops-engineer** automates CI, releases and license compliance
-  checks. This plugin is the human-level practice those checks enforce.
+- **devops-engineer** automates CI, releases and signed build
+  provenance. This plugin is the human-level practice those checks enforce.
 - Every discipline role (designers, programmers, artists, sound) loads
   this base for how to work, and its own plugin for what good work is.
 

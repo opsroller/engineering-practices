@@ -6,7 +6,7 @@ This guide shows you how to learn a project well enough to change it safely.
 
 1. Read `CLAUDE.md` at the root and in the folders you will touch.
 2. Open the project profile it names. Note the build, test and lint
-   commands; the license and header rule; the docs layout; commit scopes.
+   commands; the provenance tool in the build; the docs layout; commit scopes.
 3. Find your role in the role map. Write down the paths you own.
 4. Read each contract your work touches, and note its owner.
 5. Run `git log --oneline -20 -- <your paths>` and list open PRs on them.

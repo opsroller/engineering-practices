@@ -5,7 +5,7 @@ programmer, artist, reviewer), this plugin says how the team works around
 it: learn the project before touching it, cut work into small packages,
 land them through short-lived branches as squash-merged Conventional
 Commits, talk to other agents directly about contracts and hand-offs,
-ship only original or properly licensed material, and write the Diataxis
+ship only what the pipeline built, with its provenance, and write the Diataxis
 docs each change owes in the same pull request. Its `package-lead` agent
 runs one work package end to end; the `small-change` workflow lands a
 chore-sized change from branch to squash merge, and `land-pr` keeps an
@@ -30,7 +30,6 @@ walks through one package in a practice repository, step by step.
 [land an existing pull request](docs/how-to/how-to-land-an-existing-pull-request.md),
 [change a shared contract](docs/how-to/how-to-change-a-shared-contract.md),
 [edit a path another role owns](docs/how-to/how-to-edit-a-path-another-role-owns.md),
-[add third-party material](docs/how-to/how-to-add-third-party-material.md) and
 [run a workflow inline](docs/how-to/how-to-run-a-workflow-inline.md)
 when its subagents cost too much.
 

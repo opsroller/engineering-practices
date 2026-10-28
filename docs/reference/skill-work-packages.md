@@ -20,8 +20,7 @@ Reference, for roles carrying out or planning work packages.
 
 ## Finish checklist
 
-Done-when demonstrable; tests and CI green; docs written; provenance
-recorded; PR ready with stubs, follow-ups and `Refs:`; row set in the PR to its merged-state value;
+Done-when demonstrable; tests and CI green; docs written; PR ready with stubs, follow-ups and `Refs:`; row set in the PR to its merged-state value;
 reviewer passed and squash-merged; dependants told.
 
 ## Splitting

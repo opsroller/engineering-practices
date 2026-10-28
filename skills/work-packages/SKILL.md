@@ -52,7 +52,7 @@ A row without a testable done-when is not ready; ask the coordinator
   request to that path's owner. The one exception is a minimal edit
   your change cannot work without, made under the cross-role edit rules
   in `peer-coordination`. Shared append-only files named in the
-  profile (provenance log, credits, changelog, plan status) are open to
+  profile (changelog, plan status) are open to
   all; append, never rewrite others' lines.
 - Put your tests in files for your package rather than editing others'.
 - Add new things beside old ones rather than changing a shared contract
@@ -69,7 +69,6 @@ A row without a testable done-when is not ready; ask the coordinator
 - [ ] Done-when is true and demonstrable (test, screenshot, command output)
 - [ ] Tests and CI green
 - [ ] Docs for the work written in the project's docs, right Diataxis kind (`documentation`)
-- [ ] Provenance recorded for anything not original (`provenance`)
 - [ ] PR ready, title a Conventional Commit, body lists stubs, follow-ups, `Refs: WP-<id>`
 - [ ] Row status set in the same PR to the value it should have once merged (the plan's done value unless the project closes rows elsewhere), so the default branch is right at squash-merge
 - [ ] Reviewer passed it; you squash-merged it (`git-workflow`; `land-pr` with deliver-package's `land` args does this and the next two)
