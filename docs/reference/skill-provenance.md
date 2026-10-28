@@ -1,22 +1,22 @@
 # provenance skill
 
-Reference, for roles adding any file or material.
+Reference, for any role making a change or adding a file.
 
 | Field | Value |
 |---|---|
 | Files | `skills/provenance/SKILL.md`, `skills/provenance/license-headers.md` |
-| Use when | Adding code, assets, text, fonts, sounds, data or names; adding headers |
+| Use when | Making a change; adding a generated file, dependency, vendored file or build artifact; adding license headers |
 
-## Decision table
+## What is kept traceable
 
-| Material | Allowed when |
+| What | Traceable when |
 |---|---|
-| Own original work | Always, under the project's license (never a template default) |
-| Script-generated | Always; commit the generator |
-| Third-party | License on the profile's allowed list and compatible |
-| Dependency | Same as third-party |
-| Unknown or personal-use license | Never |
-| AI-assisted | As own work, checked for close copies |
+| Change | Reviewed, squash-merged pull request with a Conventional Commit title and `Refs: WP-<id>` |
+| Generated file | Generator and command committed; output regenerated, never hand-edited |
+| Dependency | Through the package manager at an exact version, lockfile in the same change |
+| Vendored or copied-in file | Upstream, version or commit, and checksum logged; local changes in separate commits |
+| Build artifact | Built by continuous integration from a commit; identified by commit and digest |
+| Toolchain or pipeline step | Pinned to an exact version or digest |
 
 ## Header formats
 
@@ -27,4 +27,4 @@ Reference, for roles adding any file or material.
 
 ## Provenance log columns
 
-Path, origin, author, license, changes, added in.
+Path, origin, version or commit, checksum, changes, added in.

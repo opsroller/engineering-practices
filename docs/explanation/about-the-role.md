@@ -67,13 +67,15 @@ coordinator remains the place for conflicts with what the owner asked.
 
 ## Why provenance is everyone's job
 
-A project can only be distributed if everything in it may be. A single
-copied image or snippet with no license can block a release or force a
-rewrite later, and generators routinely stamp the wrong license on new
-files. The Developer Certificate of Origin captures the promise each
-contributor makes; SPDX identifiers and the REUSE conventions make that
-promise checkable by tools. Recording the source at the moment of adding
-something costs a minute; reconstructing it later can be impossible.
+A project can only be rebuilt, audited and trusted if everything in it
+can be traced: which commit and review a change came from, which
+generator and command made a file, which exact version of a dependency
+or upstream file went in, and which pipeline run built what ships. That
+record has to be made by whoever adds the thing, at the moment they add
+it. Recording an origin, version and checksum costs a minute;
+reconstructing it later, after a URL has moved or a laptop build has
+shipped, can be impossible. The devops-engineer role then proves the
+same chain for releases with signed build attestations.
 
 ## Why documentation lives inside the work
 
