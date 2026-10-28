@@ -249,7 +249,7 @@ if (followup) {
   const f = await agent(
     `Add this follow-up change to ${pr} before it lands: "${followup}". Follow the engineering-practices skills git-workflow and provenance.
 1. Fetch, then check out ${a.head_branch} at its remote tip${a.shared_branch ? ' (others push to it: pull their commits first)' : ''}. Do not cut a new branch or open a new PR.
-2. Make the smallest edit that does it; touch nothing else. Keep the license header rule on any new file. If it turns out to need new behaviour another role would notice, a contract change or a new doc page, do not make it: return done: false with the reason.
+2. Make the smallest edit that does it; touch nothing else. If it turns out to need new behaviour another role would notice, a contract change or a new doc page, do not make it: return done: false with the reason.
 3. Run the local check: ${a.local_check}. Fix what your edit broke.
 4. Commit as a Conventional Commit, push to ${a.head_branch}, and add one line on the follow-up to the PR description.
 Return whether it is done, the new head SHA, the commit subject, and the reason if not done.`,

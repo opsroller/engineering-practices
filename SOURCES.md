@@ -16,10 +16,7 @@ Reference: the research behind this plugin, for maintainers checking where a rul
 | Ian Robinson: Consumer-Driven Contracts (martinfowler.com) | https://martinfowler.com/articles/consumerDrivenContracts.html | Consumers telling providers what they use; tolerant reading |
 | GitHub Docs: About code owners | https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners | Paths have accountable owners who are asked to review changes to them; why a cross-role edit is flagged and its owner told (`peer-coordination`) |
 | Team Topologies: interaction modes misconceptions | https://teamtopologies.com/news-blogs-newsletters/2025/2/21/team-topologies-interaction-modes-breaking-through-common-misconceptions | Collaboration, as-a-service, facilitating; bounded interactions |
-| REUSE Specification 3.3 (FSFE) | https://reuse.software/spec-3.3/ | Copyright and license headers, `.license` sidecars, `REUSE.toml` (`provenance`) |
-| SPDX: Handling license info | https://spdx.dev/learn/handling-license-info/ | `SPDX-License-Identifier` lines, expressions, `-only`/`-or-later` |
-| SPDX License List | https://spdx.org/licenses/ | Canonical license identifiers |
-| Developer Certificate of Origin 1.1 | https://developercertificate.org/ | What a contributor certifies about a contribution |
+| SLSA provenance specification v1.0 | https://slsa.dev/spec/v1.0/provenance | What build provenance records and that the build platform, not a person, generates it (`provenance`) |
 | Diataxis (Daniele Procida): start, compass, tutorials, how-to guides, reference, explanation, reference vs explanation | https://diataxis.fr/ | The four kinds, the compass, writing rules (`documentation`) |
 | Team Diataxis guide (project-files `documentation/diataxis-guide.md`) | https://diataxis.fr/ (its source) | Repo layout, what each kind of work owes, docs phase prompt, review checklist |
 | GitHub CLI manual: gh pr checks | https://cli.github.com/manual/gh_pr_checks | Polling checks with `--watch` and `--fail-fast`; exit code 8 for pending (`small-change`) |

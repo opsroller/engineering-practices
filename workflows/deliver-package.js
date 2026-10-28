@@ -4,7 +4,7 @@ export const meta = {
   description: 'Take one work package from its plan row to a ready, documented, independently checked pull request, in any role. args: { wp: "WP-NN" (required), plan: "<path to the work-package plan, optional>", branch: "<existing branch to work on, optional>", pr: "<existing PR number or URL, optional>", prior: "<handoff object or full result of a role workflow that already built the work, optional>" }',
   phases: [
     { title: 'Plan', detail: 'onboard, check for overlapping work, read the package and contracts, plan slices, stubs, caveats and affected Diataxis doc kinds' },
-    { title: 'Build', detail: 'implement on the package branch with provenance recorded, testing by running the product; no PR yet; with prior, only what the prior work left out' },
+    { title: 'Build', detail: 'implement on the package branch, testing by running the product; no PR yet; with prior, only what the prior work left out' },
     { title: 'Document', detail: 'write or update the planned Diataxis pages on the same branch; skipped when prior already wrote them' },
     { title: 'Check', detail: 'independent review of change and docs, fix loop (max 3 rounds)' },
     { title: 'Ship', detail: 'merge the default branch in, open the PR if none is open, extend the PR to items it added that the PR must also touch, confirm CI (one re-run of a single flaky job, logged), PR ready for the code reviewer, plan row set per the project status convention, dependants listed' },
@@ -103,7 +103,7 @@ if (RUN.error) return RUN.error
 const RUN_OUT = await Promise.race([RUN.halted, (async (agent, phase, log) => {
 // --- run-modes v2 end (workflow body follows; close it with the tail line) ---
 
-const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: <handoff from a role workflow, optional: the whole result or its handoff field, { branch and/or pr (at least one), tests_pass: true (required), from, docs: [pages], undocumented: [..], non_original: [..], notes } > }'
+const USAGE = 'usage: deliver-package { wp: "WP-NN", plan: "<path to work-package plan, optional>", branch: "<existing branch, optional>", pr: "<existing PR, optional>", prior: <handoff from a role workflow, optional: the whole result or its handoff field, { branch and/or pr (at least one), tests_pass: true (required), from, docs: [pages], undocumented: [..], notes } > }'
 // A review request on the hosting service reaches only an account; an agent
 // reviewer, or one sharing the author's account, is reached by message.
 const REVIEWER = 'ask the project\'s reviewer (the code-reviewer role, or the peer the profile names; never the project owner). A review request on the hosting service reaches only a person or bot with its own account: when the reviewer is an agent session or shares the author\'s account, message its session or thread directly instead (engineering-practices peer-coordination, "Find the right agent": the project\'s session tools list it) with the PR link, the head SHA and one line on what changed, and say where to post the verdict (a comment review on a shared account)'
@@ -132,7 +132,7 @@ if (args.prior !== undefined && args.prior !== null) {
   const bad = []
   if (!prior.branch && !prior.pr) bad.push('names no branch or pr, and none was given as a top-level branch or pr arg, so there is no built work to ship')
   if (prior.tests_pass !== true) bad.push(`does not report tests_pass: true (got ${JSON.stringify(prior.tests_pass)}); finish the work in ${prior.from || 'the role workflow'} first`)
-  for (const k of ['docs', 'undocumented', 'non_original']) {
+  for (const k of ['docs', 'undocumented']) {
     if (prior[k] !== undefined && !Array.isArray(prior[k])) bad.push(`${k} must be a list, got ${typeof prior[k]}`)
   }
   if (bad.length) return `blocked: prior handoff is not usable:\n- ${bad.join('\n- ')}\n${USAGE}`
@@ -214,7 +214,6 @@ const BUILD = {
   properties: {
     pr_url: { type: 'string' },
     tests_pass: { type: 'boolean' },
-    non_original: { type: 'array', items: { type: 'string' } },
     notes: { type: 'string' },
   },
   required: ['tests_pass'],
@@ -275,24 +274,23 @@ const docsPlan = (p.docs || []).map((d) => `${d.kind}: ${d.page} (${d.why})`)
 phase('Build')
 const gap = prior ? p.steps || [] : []
 const b = prior && prBranch.pr && !gap.length
-  ? { pr_url: String(prBranch.pr), tests_pass: true, non_original: [].concat(prior.non_original || []) }
+  ? { pr_url: String(prBranch.pr), tests_pass: true }
   : await agent(prior ? `${built} Complete ${wp} on branch ${p.branch}, writing only in: ${owned}.
 Follow the engineering-practices skills git-workflow, provenance and peer-coordination.
 Do only these missing steps (none means change no files):
 ${list(gap)}
 Done when: ${p.done_when}
 ${existing} Fetch it; if it is behind the default branch, merge the default branch in first. Test by running (engineering-practices git-workflow): build and run the product briefly to see it works, and run the unit tests for what you changed; leave the full CI and integration suites to CI on the PR. Commit with Conventional Commits and push. Do not open a PR; the Ship step opens one once the work is documented and reviewed.
-Return the PR URL if one is already open, whether tests pass, and the non-original items added.${nearNote}` : 
+Return the PR URL if one is already open, and whether tests pass.${nearNote}` : 
   `Implement ${wp} on branch ${p.branch}, writing only in: ${owned}.
 Follow the engineering-practices skills git-workflow, work-packages, provenance and peer-coordination, and the job-function plugin for this package's role.
 Steps:
 ${list(p.steps)}
 Stub against the contracts: ${(p.stubs || []).join(', ') || 'none'}.
 Done when: ${p.done_when}
-License every new file under the project's license with its header rule, never a template default; log every non-original item in the provenance log.
 ${existing ? `${existing} Fetch it and build on the work already there; if it is behind the default branch, merge the default branch in first.` : `Cut ${p.branch} from the latest remote default branch.`}
 Test by running (engineering-practices git-workflow): build and run the product briefly to see it works, and run the unit tests for what you changed; leave the full CI and integration suites to CI on the PR. Commit with Conventional Commits and push to ${p.branch}. Do not open a PR; the Ship step opens one once the work is documented and reviewed.
-Return the PR URL if one is already open, whether tests pass, and the non-original items added.${nearNote}`,
+Return the PR URL if one is already open, and whether tests pass.${nearNote}`,
     { schema: BUILD, phase: 'Build', label: 'build' },
   )
 if (prior && b && b.pr_url && !gap.length && prBranch.pr) log(`build reused from ${priorFrom}: ${b.pr_url}`)
@@ -320,7 +318,7 @@ let reviewed = false
 for (let round = 1; round <= 3; round++) {
   const r = await agent(
     `Act as an independent reviewer (follow the code-reviewer role if installed) of the work for ${wp} on ${p.branch} (its diff against the latest remote default branch). Do not edit anything.
-Check: done-when "${p.done_when}" is met; tests cover the change; only owned paths (${owned}) changed; Conventional Commit title; provenance logged and every new file carries the project's license header; docs per the engineering-practices documentation skill's Check step and the technical-writer docs-review checklist if installed (each touched page one Diataxis kind, titles follow the patterns, links connect the kinds, docs in this same PR, nothing user-visible left undocumented).
+Check: done-when "${p.done_when}" is met; tests cover the change; only owned paths (${owned}) changed; Conventional Commit title; docs per the engineering-practices documentation skill's Check step and the technical-writer docs-review checklist if installed (each touched page one Diataxis kind, titles follow the patterns, links connect the kinds, docs in this same PR, nothing user-visible left undocumented).
 List blocking problems only where you can point to a realistic failure or a broken rule; list other suggestions separately.`,
     { schema: REVIEW, phase: 'Check', label: `review:${round}`, independent: true },
   )

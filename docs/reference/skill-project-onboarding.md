@@ -12,7 +12,7 @@ Reference, for roles starting work in a project.
 | # | Source | Extracts |
 |---|---|---|
 | 1 | `CLAUDE.md` (root and nested) | Standing rules, profile path |
-| 2 | Project profile | Stack, commands, targets, license rule, docs layout, scopes, release |
+| 2 | Project profile | Stack, commands, targets, provenance tool, docs layout, scopes, release |
 | 3 | Role map | Owned paths, applicable project docs, neighbours |
 | 4 | Contracts | Interfaces the work touches and their owners |
 | 5 | Plan row | Dependencies, done-when |

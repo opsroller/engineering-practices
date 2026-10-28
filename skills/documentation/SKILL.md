@@ -25,7 +25,7 @@ summary.
 2. **Docs ship in the same PR as the change.** A code, asset or design
    change without its docs is not done. "Docs to follow" is not allowed.
 3. **Every page starts with one line** saying what kind it is and who
-   it is for, and carries the project's license header (`provenance`).
+   it is for.
 4. Use the project's docs layout (profile). Default: `docs/tutorials/`,
    `docs/how-to/how-to-<goal>.md`, `docs/reference/` mirroring the
    product, `docs/explanation/about-<topic>.md`. Create a folder when its

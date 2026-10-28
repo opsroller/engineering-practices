@@ -91,8 +91,8 @@ documentation as a job in its own right.
 - **code-reviewer** is the review gate. This plugin prepares PRs for it.
 - **technical-writer** owns the Diataxis method, docs sets and audits.
   This plugin requires each role to write the docs its own change owes.
-- **devops-engineer** automates CI, releases and license compliance
-  checks. This plugin is the human-level practice those checks enforce.
+- **devops-engineer** automates CI, releases and signed build
+  provenance. This plugin is the human-level practice those checks enforce.
 - Every discipline role (designers, programmers, artists, sound) loads
   this base for how to work, and its own plugin for what good work is.
 
